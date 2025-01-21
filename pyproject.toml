@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jax2sympy"
+version = "0.0.1"
+description = ""
+authors = [
+    { name = "John Viljoen", email = "johnviljoen2@gmail.com" }
+]
+license = { text = "MIT" }
+readme = "README.md"
+keywords = [""]
+
+dependencies = [
+    "matplotlib",
+    "tqdm",
+    "jax[cuda12]",
+    "sympy" # symbolic derivations
+]
+
+[tool.setuptools.packages.find]
+where = [
+    "src", "problems", "jax2sympy"
+]  # list of folders that contain the packages (["."] by default)
+
