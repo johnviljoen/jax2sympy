@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this repository, please cite it as follows."
+title: "jax2sympy"
+authors:
+  - family-names: "John"
+    given-names: "Viljoen"
+version: "1.0.0"
+# doi: "10.5281/zenodo.XXXXXX" # Optional, replace with DOI if available
+date-released: 2025-01-01
+url: "https://github.com/johnviljoen/jax2sympy"

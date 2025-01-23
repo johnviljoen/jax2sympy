@@ -26,7 +26,7 @@ def get_sym_outvar(inexprs, eqn):
     else:
         return out_expr
 
-def jaxpr_to_sympy_expressions(jaxpr, var2sym={}, x_cnt=0, c_cnt=0):
+def jaxpr_to_sympy_expressions(jaxpr, var2sym=dict(), x_cnt=0, c_cnt=0):
     
     def append_vars(vars, var2sym, sym_name, cnt):
         for i, var in enumerate(vars): # go through all inputs to the jaxpr
@@ -37,16 +37,6 @@ def jaxpr_to_sympy_expressions(jaxpr, var2sym={}, x_cnt=0, c_cnt=0):
             symbolic_array = np.array(symbols_list).reshape(shape)
             var2sym[var] = symbolic_array
         return var2sym, i+1
-    
-    def sub_consts(var2sym, consts):
-        const_idx = 0
-        for key, arr in list(var2sym.items()):
-            # Ensure 'arr' is an array of object (sympy-like) and check if *all* entries start with 'c'
-            if (isinstance(arr, np.ndarray) and arr.dtype == object
-                and all(str(sym).startswith('c') for sym in arr.ravel())):
-                var2sym[key] = consts[const_idx]
-                const_idx += 1
-        return var2sym
 
     def substitute_symbol(symbol, sym_map):
         return symbol.subs(sym_map)
@@ -55,8 +45,17 @@ def jaxpr_to_sympy_expressions(jaxpr, var2sym={}, x_cnt=0, c_cnt=0):
     if jaxpr.jaxpr.constvars != []:
         var2sym, c_cnt = append_vars(jaxpr.jaxpr.constvars, var2sym, 'c', cnt=c_cnt)
 
-    # sub in real values for the constants
-    var2sym = sub_consts(var2sym, jaxpr.consts)
+    # (OPTIONAL) sub in real values for the constants
+    # def sub_consts(var2sym, consts):
+    #     const_idx = 0
+    #     for key, arr in list(var2sym.items()):
+    #         # Ensure 'arr' is an array of object (sympy-like) and check if *all* entries start with 'c'
+    #         if (isinstance(arr, np.ndarray) and arr.dtype == object
+    #             and all(str(sym).startswith('c') for sym in arr.ravel())):
+    #             var2sym[key] = consts[const_idx]
+    #             const_idx += 1
+    #     return var2sym
+    # var2sym = sub_consts(var2sym, jaxpr.consts)
 
     for i, eqn in enumerate(jaxpr.eqns):
         print(f"eqn number: {i}")
@@ -64,12 +63,7 @@ def jaxpr_to_sympy_expressions(jaxpr, var2sym={}, x_cnt=0, c_cnt=0):
         if eqn.primitive.name == "pjit":
             _jaxpr = eqn.params.get("jaxpr", None)
             sub_syms_out, sub_var2sym, x_cnt, c_cnt = jaxpr_to_sympy_expressions(_jaxpr, var2sym={}, x_cnt=x_cnt, c_cnt=c_cnt)
-            # assert len(sub_sym_out) == 1
-            # sub_sym_out = np.stack(sub_sym_out)
-            # sub_sym_out = sub_sym_out[0]
             syms_in = get_sym_invar(eqn.invars, var2sym)
-            # assert len(syms_in) == 1
-            # sym_in = sym_in[0]
             iterator = iter(sub_var2sym)
             sub_syms_in = [sub_var2sym[next(iterator)] for _ in range(len(syms_in))]
             sym_map = {}
@@ -101,7 +95,6 @@ if __name__ == "__main__":
 
     prims = []
     for i, eqn in enumerate(jaxpr.eqns):
-        # print(i)
         prim = eqn.primitive.name
         if prim in prims:
             continue
