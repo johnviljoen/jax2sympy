@@ -25,7 +25,7 @@ _sym_cosh = lambda a: np.vectorize(sy.cosh)(a)
 _sym_tanh = lambda a: np.vectorize(sy.tanh)(a)
 _sym_sqrt = lambda a: np.vectorize(sy.sqrt)(a)
 _sym_sign = lambda a: np.vectorize(sy.sign)(a)
-_sym_eq = lambda a, b:  np.vectorize(sy.Eq)(a, b)
+_sym_eq = lambda a, b:  np.vectorize(lambda a, b: int(a == b))(a, b)
 _sym_ne = lambda a, b:  np.vectorize(sy.Ne)(a, b)
 _sym_lt = lambda a, b:  np.vectorize(sy.StrictLessThan)(a, b)
 _sym_le = lambda a, b:  np.vectorize(sy.LessThan)(a, b)
@@ -38,7 +38,51 @@ _sym_max = lambda a, b: np.vectorize(sy.Max)(a, b)
 _sym_min = lambda a, b: np.vectorize(sy.Min)(a, b)
 
 # array
-_sym_reduce_sum = lambda a: np.sum(a)
+def _sym_reduce_sum(a, eqn):
+    assert len(a) == 1
+    return np.sum(a[0], axis=eqn.params["axes"])
+
+# add any for our purposes is just add
+def _sym_add_any(inexprs):
+    # Use broadcasting to add arrays sequentially
+    result = inexprs[0]
+    for array in inexprs[1:]:
+        result = np.add(result, array)  # np.add handles broadcasting
+    return result
+
+def _sym_select_n(inexprs):
+    boolean = inexprs[0]
+    true_arr = inexprs[1]
+    false_arr = inexprs[2]
+    return np.where(boolean, true_arr, false_arr)
+
+def _sym_pad(inexprs, eqn):
+
+    assert len(inexprs) == 2
+
+    inexpr = inexprs[0]
+    padding_value = inexprs[1]
+    padding_config = eqn.params["padding_config"]
+
+    # Create the padded shape
+    padded_shape = [
+        low + (inexpr.shape[i] - 1) * (interior + 1) + 1 + high
+        for i, (low, high, interior) in enumerate(padding_config)
+    ]
+
+    # Create an array filled with the padding value
+    result = np.full(padded_shape, padding_value, dtype=inexpr.dtype)
+    
+    # Calculate slices to place the original array into the padded result
+    insert_slices = tuple(
+        slice(low, low + inexpr.shape[i] * (interior + 1), interior + 1)
+        for i, (low, high, interior) in enumerate(padding_config)
+    )
+
+    # Place the operand in the result array
+    result[insert_slices] = inexpr
+    return result
+
 _sym_convert_element_type = lambda a: a
 
 def _sym_reshape(a, new_sizes, dimensions):
@@ -51,6 +95,23 @@ def _sym_reshape(a, new_sizes, dimensions):
 def _sym_squeeze(a, dimensions):
     slices = [0 if i in dimensions else slice(None) for i in range(a.ndim)]
     return a[tuple(slices)]
+
+# builds an array on device - this can be simplified
+def _sym_iota(eqn):
+    shape = eqn.params["shape"]
+    dimension = eqn.params["dimension"]
+    return np.arange(shape[dimension]).reshape(
+        [1 if i != dimension else shape[dimension] for i in range(len(shape))]
+    ).repeat(np.prod(shape) // shape[dimension], axis=dimension).reshape(shape)
+
+def _sym_split(inexprs, eqn):
+    print("WARNING: check functionality of split")
+    sizes = eqn.params["sizes"]
+    axis = eqn.params["axis"]
+    assert len(inexprs) == 1
+    operand = inexprs[0]
+    indices = np.cumsum(sizes[:-1])  # Calculate split indices
+    return np.split(operand, indices, axis=axis)
 
 def _sym_slice(a, start_indices, limit_indices, strides):
     axis_slice = []
@@ -89,6 +150,8 @@ def _sym_gather(operand, start_indices, dimension_numbers, slice_sizes, mode):
     
     # Unpack dimension numbers
     offset_dims = dimension_numbers.offset_dims
+    # only can handle one offset dim rn
+    assert len(offset_dims) == 1
     collapsed_slice_dims = dimension_numbers.collapsed_slice_dims
     start_index_map = dimension_numbers.start_index_map
 
@@ -105,7 +168,9 @@ def _sym_gather(operand, start_indices, dimension_numbers, slice_sizes, mode):
     # Precompute mapping for remapped_offset_dims
     remapped_offset_dims = []
     operand_rank = len(operand.shape)
+    assert operand_rank == 1
     available_dims = [dim for dim in range(operand_rank) if dim not in collapsed_slice_dims]
+    assert len(offset_dims) == 1
     for idx, offset_dim in enumerate(offset_dims):
         remapped_offset_dims.append(available_dims[idx])
 
@@ -133,6 +198,7 @@ def _sym_gather(operand, start_indices, dimension_numbers, slice_sizes, mode):
         # NOTE MODIFIED: In = tuple(Sin[d] + Oin[d] for d in range(operand_rank))
         # Step 5: Compute In = Sin + Oin
         In = tuple(Sin[d] + Oin[d] for d in range(operand_rank))
+        In = (In[0] - offset_dim * operand.shape[0],) # the offset
 
         # Step 6: Handle out-of-bounds indices
         if mode == jax.lax.GatherScatterMode.CLIP:
@@ -214,13 +280,13 @@ def _sym_scatter(operand, scatter_indices, updates, dimension_numbers, mode):
     return output
 
 def _sym_broadcast_in_dim(a, shape, broadcast_dimensions):
-    if len(broadcast_dimensions) == 0:
-        _z = np.zeros(shape)
-        a = _z + a
-    else:
-        raise NotImplementedError
-    # print(f"a.shape: {a.shape}")
-    return a
+    assert len(a) == 1
+    a = a[0]
+    reshaped_shape = [1] * len(shape)
+    for i, dim in enumerate(broadcast_dimensions):
+        reshaped_shape[dim] = a.shape[i]
+    a_reshaped = np.reshape(a, reshaped_shape)
+    return np.broadcast_to(a_reshaped, shape)
 
 def _sym_concatenate(arr_list, dimension=0):
     return np.concat(arr_list, axis=dimension)
@@ -282,8 +348,12 @@ primitive_to_sympy_op = {
         slice_sizes = eqn.params["slice_sizes"],
         mode = eqn.params["mode"],
     ),
-    "reduce_sum": lambda inexprs, eqn: _sym_reduce_sum(inexprs),
+    "add_any": lambda inexprs, eqn: _sym_add_any(inexprs),
+    "pad": lambda inexprs, eqn: _sym_pad(inexprs, eqn),
+    "select_n": lambda inexprs, eqn: _sym_select_n(inexprs),
+    "reduce_sum": lambda inexprs, eqn: _sym_reduce_sum(inexprs, eqn),
     "iota": lambda inexprs, eqn: _sym_iota(eqn),
+    "split": lambda inexprs, eqn: _sym_split(inexprs, eqn),
     "convert_element_type": lambda inexprs, eqn: _sym_convert_element_type(inexprs[0]),
     "dot_general": lambda inexprs, eqn: _sym_dot_general(inexprs[0], inexprs[1], eqn),
     "transpose": lambda inexprs, eqn: _sym_transpose(inexprs[0], eqn),
