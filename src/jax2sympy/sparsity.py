@@ -249,18 +249,10 @@ if __name__ == "__main__":
     sym_hess_val, sym_hess_coo = sym_sparse_jacobian(sym_inp_shape, sym_jac_val, sym_jac_val.shape, get_var_idx)
     sym_hess_coo = recursive_coo(sym_jac_coo, sym_hess_coo) # map the coo's
     
-    sparsify_nlp(f, h, g, x0)
+    jac_f_sp, jac_f_coo, jac_h_sp, jac_h_coo, jac_g_sp, jac_g_coo, \
+        hes_f_sp, hes_f_coo, hes_h_sp, hes_h_coo, hes_g_sp, hes_g_coo = sparsify_nlp(f, h, g, x0)
 
-    jac_val, jac_coo = sym_sparse_jacrev(h, x0)
-    hess_val, hess_coo = sym_sparse_jacrev(jac_val, x0)
-    jacrev = jax_sparse_jacrev(h, jac_coo)
+    # test if the sparse matrices match the dense ones
+    
+
     pass
-
-
-    jac_coo = sym_sparse_jaccoo(h, x0)
-    jacrev = jax_sparse_jacrev(h, jac_coo)
-    hess_coo = sym_sparse_jaccoo(jacrev, x0)
-
-    # example usage for jacobian
-    test = jax.jit(jacrev)(x0)
-

@@ -2,7 +2,6 @@ import jax
 import sympy as sy
 import numpy as np
 from jax.core import Literal
-# from jax2sympy.sympy_compat import broadcast_decorator, elementwise_decorator, prepostprocess_decorator
 
 # elementwise
 _sym_add = lambda a, b: a + b
