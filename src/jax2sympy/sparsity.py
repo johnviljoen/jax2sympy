@@ -74,10 +74,22 @@ def sym_sparse_jaccoo(f, x):
 
     return jac_coo
 
+def jax_sparse_hessian(f, hes_coo):
+    """
+    Returns a function 'hessian(x)' that computes the sparse hessian of a DENSE function 'f'
+    according to the given sparsity pattern 'hes_coo'
+
+    NOTE that this is necessary rather than recursively calculating jax_sparse_jacrev below
+    as that requires dense output function f, as does this function, a sparse one could be created that
+    works recursively but for now I am ignoring this
+    """
+    # TODO
+
+
 def jax_sparse_jacrev(f, jac_coo):
     """
-    Returns a function `jacrev(x)` that computes the sparse Jacobian of `f`
-    according to the given sparsity pattern `jac_coo`.
+    Returns a function `jacrev(x)` that computes the sparse Jacobian of a DENSE output function `f`
+    according to the given sparsity pattern `jac_coo`
     
     Arguments:
       f: A function f(x) -> y (either scalar or vector-valued).
@@ -85,14 +97,21 @@ def jax_sparse_jacrev(f, jac_coo):
                If shape == (N, 1), we assume f is scalar-valued and each row is [col].
                If shape == (N, 2), each row is [row, col] for the partial d f[row] / d x[col].
     """
+    if jac_coo is None: # indicates that there isnt a function
+        return lambda x: None # return a function that also returns None
+
     jac_coo = jnp.array(jac_coo)
-    ncols = jac_coo.shape[1]  # either 1 or 2
+    ncols = jac_coo.shape[1]
+
+    if ncols == 3:
+        pass
 
     def single_input_output_grad(x, coo):
         """
         Computes a single partial derivative:
           - If ncols == 1, interpret coo = [col], returning grad f(x) wrt x[col].
           - If ncols == 2, interpret coo = [row, col], returning grad f(x)[row] wrt x[col].
+          - If ncols == 3, interpret coo = [row, col, x_idx], returning grad f(x)[row, col] wrt x[x_idx].
         """
         if ncols == 1:
             # Scalar function case: f: R^n -> R
@@ -100,18 +119,28 @@ def jax_sparse_jacrev(f, jac_coo):
             def partial_func(x_col):
                 x_reassembled = x.at[col].set(x_col)
                 return f(x_reassembled)  # scalar output
-        else:
+        elif ncols == 2:
             # Vector/matrix function case: f: R^n -> R^m
             row, col = coo
             def partial_func(x_col):
                 x_reassembled = x.at[col].set(x_col)
                 return f(x_reassembled)[row]  # pick out the row-th output
+        elif ncols == 3:
+            # Matrix (or 2D) output: f: R^n -> R^(m x p)
+            row, col, x_idx = coo
+            def partial_func(x_col):
+                x_reassembled = x.at[x_idx].set(x_col)
+                return f(x_reassembled)[row, col]  # pick out the (row, col)-th entry (scalar)
+        else: raise NotImplementedError
 
         # Take derivative w.r.t. x[col], evaluate at x[col]
-        return jax.grad(partial_func)(x[col])
+        return jax.grad(partial_func)(x[coo[-1]])
 
     def jacrev(x):
         # Vectorize over all coordinate pairs in jac_coo
+        # TESTING
+        if ncols == 3:
+            single_input_output_grad(x, jac_coo[0])
         return jax.vmap(single_input_output_grad, in_axes=(None, 0))(x, jac_coo)
 
     return jacrev
@@ -253,6 +282,47 @@ if __name__ == "__main__":
         hes_f_sp, hes_f_coo, hes_h_sp, hes_h_coo, hes_g_sp, hes_g_coo = sparsify_nlp(f, h, g, x0)
 
     # test if the sparse matrices match the dense ones
-    
+    def get_dense(sp, coo, shape):
+        jac_f_dense = np.zeros(shape)
+        for _sp, _coo in zip(sp, coo):
+            jac_f_dense[*_coo] = _sp
+        return jac_f_dense
+
+    def test_dense(f, f_sp, coo, x):
+        f_out = f(x)
+        f_dense = get_dense(f_sp(x), coo, f_out.shape)
+        discrepancy = np.max(np.abs(f_out - f_dense))
+        assert discrepancy <= 1e-6
+
+    def test_coo(f, coos, x):
+        if coos is None: return None
+        outs = f(x)
+        sum = np.array(0.)
+        for coo in coos:
+            sum += outs[*coo]
+        assert np.max(np.abs(sum - outs.sum())) < 1e-5
+
+    print("testing coos")
+    test_coo(jax.jacrev(f), jac_f_coo, x0)
+    test_coo(jax.jacrev(h), jac_h_coo, x0)
+    test_coo(jax.jacrev(g), jac_g_coo, x0)
+    test_coo(jax.hessian(f), hes_f_coo, x0)
+    test_coo(jax.hessian(h), hes_h_coo, x0)
+    test_coo(jax.hessian(g), hes_g_coo, x0)
+
+    print('testing jacobians')
+    test_dense(jax.jacrev(f), jac_f_sp, jac_f_coo, x0)
+    test_dense(jax.jacrev(h), jac_h_sp, jac_h_coo, x0)
+    test_dense(jax.jacrev(g), jac_g_sp, jac_g_coo, x0)
+
+    print('testing hessians')
+    # test_dense(jax.hessian(f), hes_f_sp, hes_f_coo, x0)
+
+    test_dense(jax.hessian(h), hes_h_sp, hes_h_coo, x0)
+    test_dense(jax.hessian(g), hes_g_sp, hes_g_coo, x0)
+
+    # jac_f = jax.jacrev(f)(x0)
+    # jac_f_dense = get_dense(jac_f_sp(x0), jac_f_coo, jac_f.shape)
+
 
     pass
