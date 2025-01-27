@@ -83,8 +83,44 @@ def jax_sparse_hessian(f, hes_coo):
     as that requires dense output function f, as does this function, a sparse one could be created that
     works recursively but for now I am ignoring this
     """
-    # TODO
+    
+    if hes_coo is None:
+        return lambda x: None
 
+    hes_coo = jnp.array(hes_coo)
+    ncols = hes_coo.shape[1]
+
+    def single_input_output_grad(x, coo):
+        if ncols == 1:
+            raise Exception("hessians should never be of shape 1D")
+        elif ncols == 2:
+            row, col = coo
+            def partial_func(x_in):
+                # pick out the row-th component
+                grad_of_frow = jax.grad(lambda xx: f(xx))(x_in)
+                return grad_of_frow[row]
+            
+            # second derivative w.r.t. x
+            return jax.grad(partial_func)(x)[col]
+        elif ncols == 3:
+            row, col, dep = coo
+            def partial_func(x_in):
+                # pick out the col-th component
+                grad_of_frow = jax.grad(lambda xx: f(xx)[row])(x_in)
+                return grad_of_frow[col]
+            
+            # second derivative w.r.t. x
+            return jax.grad(partial_func)(x)[dep]
+        else: raise NotImplementedError
+
+    def jacrev(x):
+        # Vectorize over all coordinate pairs in jac_coo
+        # TESTING
+        # if ncols == 2 or ncols == 3:
+        #     single_input_output_grad(x, hes_coo[0])
+        return jax.vmap(single_input_output_grad, in_axes=(None, 0))(x, hes_coo)
+
+    return jacrev
 
 def jax_sparse_jacrev(f, jac_coo):
     """
@@ -222,11 +258,11 @@ def sparsify_nlp(f, h, g, x):
 
     # transform the functions according to their patterns
     jac_f_sp = jax_sparse_jacrev(f, jac_f_coo)
-    hes_f_sp = jax_sparse_jacrev(jac_f_sp, hes_f_coo)
+    hes_f_sp = jax_sparse_hessian(f, hes_f_coo)
     jac_h_sp = jax_sparse_jacrev(h, jac_h_coo)
-    hes_h_sp = jax_sparse_jacrev(jac_h_sp, hes_h_coo)
+    hes_h_sp = jax_sparse_hessian(h, hes_h_coo)
     jac_g_sp = jax_sparse_jacrev(g, jac_g_coo)
-    hes_g_sp = jax_sparse_jacrev(jac_g_sp, hes_g_coo)
+    hes_g_sp = jax_sparse_hessian(g, hes_g_coo)
     
     # we could jit those functions now - but left to a higher point in the code
     # we could also handle the conversion to the larger KKT system matrix coordinates here
@@ -289,6 +325,7 @@ if __name__ == "__main__":
         return jac_f_dense
 
     def test_dense(f, f_sp, coo, x):
+        if coo is None: return None
         f_out = f(x)
         f_dense = get_dense(f_sp(x), coo, f_out.shape)
         discrepancy = np.max(np.abs(f_out - f_dense))
@@ -302,27 +339,34 @@ if __name__ == "__main__":
             sum += outs[*coo]
         assert np.max(np.abs(sum - outs.sum())) < 1e-5
 
-    print("testing coos")
+    print("testing coos correctness...")
     test_coo(jax.jacrev(f), jac_f_coo, x0)
     test_coo(jax.jacrev(h), jac_h_coo, x0)
     test_coo(jax.jacrev(g), jac_g_coo, x0)
     test_coo(jax.hessian(f), hes_f_coo, x0)
     test_coo(jax.hessian(h), hes_h_coo, x0)
     test_coo(jax.hessian(g), hes_g_coo, x0)
+    print('passed')
 
-    print('testing jacobians')
+    print('testing jacobians correctness...')
     test_dense(jax.jacrev(f), jac_f_sp, jac_f_coo, x0)
     test_dense(jax.jacrev(h), jac_h_sp, jac_h_coo, x0)
     test_dense(jax.jacrev(g), jac_g_sp, jac_g_coo, x0)
+    print('passed')
 
-    print('testing hessians')
-    # test_dense(jax.hessian(f), hes_f_sp, hes_f_coo, x0)
-
+    print('testing hessians correctness...')
+    test_dense(jax.hessian(f), hes_f_sp, hes_f_coo, x0)
     test_dense(jax.hessian(h), hes_h_sp, hes_h_coo, x0)
     test_dense(jax.hessian(g), hes_g_sp, hes_g_coo, x0)
+    print('passed')
 
-    # jac_f = jax.jacrev(f)(x0)
-    # jac_f_dense = get_dense(jac_f_sp(x0), jac_f_coo, jac_f.shape)
+    # TODO test the timings and memory usage and jaxprs
+    print('testing jacobian speed...')
+    print('testing hessian speed...')
+
+    print('testing jacobian memory usage...')
+    print('testing hessian memory usage...')
 
 
-    pass
+
+    print('fin')
