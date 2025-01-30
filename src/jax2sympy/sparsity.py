@@ -364,6 +364,9 @@ if __name__ == "__main__":
     print('testing jacobian speed...')
     print('testing hessian speed...')
 
+    def benchmark(f, x):
+        pass
+
     print('testing jacobian memory usage...')
     print('testing hessian memory usage...')
 
