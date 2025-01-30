@@ -305,24 +305,3 @@ def quadcopter_nav(N=3):
     }
 
     return f, h, g, z_init, gt, aux
-
-if __name__ == "__main__":
-
-    from problems.quad_plot import Animator
-    from jaxipm.ipopt_reference import run_ipopt
-
-    f, h, g, z_init, gt, aux = quadcopter_nav()
-
-    result = run_ipopt(f, h, g, z_init)
-
-    x = aux[0](result.x)[0]
-    p = aux[2]
-    N = 10
-    Ts = 0.1
-    t = np.arange(0, N * Ts, Ts)
-    r = np.array([[0,0,0,1,0,0,0,0,0,0,0,0,0]]*N)
-
-    animator = Animator(p, x, t, r)
-    animator.animate()
-
-    print('fin')
