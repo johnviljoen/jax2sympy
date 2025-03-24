@@ -58,8 +58,8 @@ def jaxpr_to_sympy_expressions(jaxpr, var2sym=dict(), x_cnt=0, c_cnt=0):
     # var2sym = sub_consts(var2sym, jaxpr.consts)
 
     for i, eqn in enumerate(jaxpr.eqns):
-        print(f"eqn number: {i}")
-        print(f"eqn: {eqn}")
+        # print(f"eqn number: {i}")
+        # print(f"eqn: {eqn}")
         if eqn.primitive.name == "pjit":
             _jaxpr = eqn.params.get("jaxpr", None)
             sub_syms_out, sub_var2sym, x_cnt, c_cnt = jaxpr_to_sympy_expressions(_jaxpr, var2sym={}, x_cnt=x_cnt, c_cnt=c_cnt)
@@ -76,7 +76,7 @@ def jaxpr_to_sympy_expressions(jaxpr, var2sym=dict(), x_cnt=0, c_cnt=0):
             exprs = get_sym_outvar(inexprs, eqn)
         exprs = [np.asarray(expr) for expr in exprs] # check we dont lose the array with squeezing and indexing
         for outvar, expr in zip(eqn.outvars, exprs):
-            print(f"expression added to var2sym: {expr} under: {outvar}")
+            # print(f"expression added to var2sym: {expr} under: {outvar}")
             assert outvar.aval.shape == expr.shape
             var2sym[outvar] = expr
 

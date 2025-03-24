@@ -1,18 +1,7 @@
-"""
-This file represents my motivation for building jax2sympy transpiler thing,
-I wanted sparsity structure of arbitrary vector valued function jacobians and
-hessians for large scale nonlinear programming in JAX. I demonstrate this by
-creating the necessary sparse matrices for a 13D quadcopter MPC nonlinear optimization
-problem. The way these transforms is done is very inconsistent and not very performant,
-but the resulting functions are the same performance as a better creation would be so
-I am not so concerned.
-
-I leave it here as an example of what can be created with this tool.
-"""
-
 import numpy as np
 import jax
 import jax.numpy as jnp
+from jax.experimental.sparse import BCOO
 import sympy as sy
 from tqdm import tqdm
 from jax2sympy.translate import jaxpr_to_sympy_expressions
@@ -102,7 +91,7 @@ def get_sparsity_pattern(f, x, type='hessian'): # "jacobian" or "hessian"
         sym_jac_val, sym_jac_coo = _sym_sparse_jacobian(sym_inp_shape, sym_out_flat, sym_out_shape, get_var_idx)
         _, sym_hess_coo = _sym_sparse_jacobian(sym_inp_shape, sym_jac_val, sym_jac_val.shape, get_var_idx)
         if sym_hess_coo.size == 0: # sometimes the hessian doesnt exist - think linear inequalities
-            return None
+            return np.array([], dtype=np.int64)
         else:
             # map the coos recursively
             sym_hess_coo = np.vstack([np.hstack([sym_jac_coo[v], sym_hess_coo[i,1:]]) for i, v in enumerate(sym_hess_coo[:,0])])
@@ -114,43 +103,89 @@ def get_sparsity_pattern(f, x, type='hessian'): # "jacobian" or "hessian"
 # --- JAX function transformation --- #
 #######################################
 
-def sparse_jacobian(f, jac_coo):
-    """
-    transforms dense f(x): R^n -> R^m into its sparse jacobian jac(x): R^n -> R^mxn given a known sparsity pattern of jac(x)
-    """
+def sparse_jacobian(f, jac_coo, out_shape):
 
-    if jac_coo is None: # indicates that there isnt a function
-        return lambda x: None # return a function that also returns None
+    if len(jac_coo) == 0:
+        # indicates that there isn't a function or no known Jacobian pattern
+        return lambda x: BCOO([jnp.array([]), jnp.zeros([0, len(out_shape)], dtype=jnp.int32)], shape=out_shape)
 
-    # adjust jac_coo to allow for jittability in partial when slicing y on return statement
+    # Ensure jac_coo is a JAX array of int
     jac_coo = jnp.array(jac_coo, dtype=jnp.int32)
-    nrows = jac_coo.shape[0]
     ncols = jac_coo.shape[1]
-    jac_coo = jnp.hstack([jnp.zeros([nrows,1], dtype=jnp.int32), jac_coo]) if ncols == 1 else jac_coo
+    # adjust jac_coo to allow for jittability in partial when slicing y on return statement
+    # nrows = jac_coo.shape[0]
+    # jac_coo = jnp.hstack([jnp.zeros([nrows,1], dtype=jnp.int32), jac_coo]) if ncols == 1 else jac_coo
     
-    def partial(element, coo):
-        _x = x.at[coo[-1]].set(element)
-        y = f(_x)
-        if ncols == 1:
-            return y
-        elif ncols > 1:
-            return y[coo[:-1]].squeeze()
-    
-    g = lambda element, coo: jax.grad(partial)(element[coo[-1]], coo)
+    # sometimes function is scalar output, giving a leading 1 in the out_shape - we remove it
+    if out_shape[0] == 1:
+        out_shape = out_shape[1:]
 
-    jacrev = lambda x: jax.vmap(g, in_axes=(None, 0))(x, jac_coo)
-    
-    return jacrev
+    # CASE 1: vector-valued function: R^n -> R^m
+    #         Each row in jac_coo is [out_idx, x_idx]
+    if ncols > 1:  
+        def partial_out_j(x, out_idx, x_idx):
+            """
+            Computes d(f_out_idx)(x)/dx_x_idx = partial derivative of the out_idx-th
+            component of f w.r.t. the x_idx-th component of x.
+            """
+            # grad_f_out is the gradient of f(...)[out_idx], i.e. R^n -> scalar
+            grad_f_out = jax.grad(lambda z: f(z)[out_idx])(x)
+            return grad_f_out[x_idx]
 
-def sparse_hessian(f, hes_coo):
+        def jac_fn(x):
+            """
+            Evaluate all requested Jacobian entries at x,
+            and store them in a BCOO with coords=jac_coo, data=the partials.
+            """
+            def single_entry(coord):
+                out_idx, x_idx = coord
+                return partial_out_j(x, out_idx, x_idx)
 
-    if hes_coo is None:
+            # Vectorize over rows of jac_coo to get all partial derivatives
+            out = jax.vmap(single_entry)(jac_coo)
+            # In the style of your sparse_hessian, we'll store shape=jac_coo.shape
+            return BCOO((out, jac_coo), shape=out_shape)
+
+    # CASE 2: scalar-valued function: R^n -> R
+    #         Each row in jac_coo is [x_idx]
+    elif ncols == 1:
+        def partial_j(x, x_idx):
+            """
+            Computes d f(x)/dx_x_idx for a scalar function f.
+            """
+            grad_f = jax.grad(f)(x)  # shape (n,)
+            return grad_f[x_idx]
+
+        def jac_fn(x):
+            def single_entry(coord):
+                x_idx = coord[0]
+                return partial_j(x, x_idx)
+
+            out = jax.vmap(single_entry)(jac_coo)
+            return BCOO((out, jac_coo), shape=out_shape)
+
+    else:
+        # Not a recognized pattern
+        raise ValueError(
+            f"jac_coo should have either 1 column (scalar f) or 2 columns (vector f). "
+            f"Got shape={out_shape}."
+        )
+
+    return jac_fn
+
+def sparse_hessian(f, hes_coo, out_shape):
+
+    if len(hes_coo) == 0:
         # indicates that there isn't a function / or no known Hessian pattern
-        return lambda x: None
+        return lambda x: BCOO([jnp.array([]), jnp.zeros([0, len(out_shape)], dtype=jnp.int32)], shape=out_shape)
 
     # Ensure hes_coo is a JAX array of int
     hes_coo = jnp.array(hes_coo, dtype=jnp.int32)
     ncols = hes_coo.shape[1]
+
+    # sometimes function is scalar output, giving a leading 1 in the out_shape - we remove it
+    if out_shape[0] == 1:
+        out_shape = out_shape[1:]
 
     if ncols > 2:
 
@@ -179,7 +214,8 @@ def sparse_hessian(f, hes_coo):
                 return partial_out_ij(x, out_idx, i, j)
 
             # Vectorize over rows of hes_coo
-            return jax.vmap(single_entry)(hes_coo)
+            out = jax.vmap(single_entry)(hes_coo)
+            return BCOO([out, hes_coo], shape=out_shape)
         
     elif ncols == 2:
 
@@ -205,7 +241,8 @@ def sparse_hessian(f, hes_coo):
                 return partial_ij(x, i, j)
 
             # Vectorize over rows of hes_coo
-            return jax.vmap(single_entry)(hes_coo)
+            out = jax.vmap(single_entry)(hes_coo)
+            return BCOO([out, hes_coo], shape=out_shape)
 
     return hess_fn
 
@@ -223,28 +260,28 @@ if __name__ == "__main__":
     jac_g_coo = get_sparsity_pattern(g, x, type="jacobian")
     hes_g_coo = get_sparsity_pattern(g, x, type="hessian" )
 
-    jac_f_sp = sparse_jacobian(f, jac_f_coo)
-    jac_h_sp = sparse_jacobian(h, jac_h_coo)
-    jac_g_sp = sparse_jacobian(g, jac_g_coo)
-    hes_f_sp = sparse_hessian(f, hes_f_coo)
-    hes_h_sp = sparse_hessian(h, hes_h_coo)
-    hes_g_sp = sparse_hessian(g, hes_g_coo)
+    jac_f_sp = sparse_jacobian(f, jac_f_coo, (f(x).size, x.size))
+    jac_h_sp = sparse_jacobian(h, jac_h_coo, (h(x).size, x.size))
+    jac_g_sp = sparse_jacobian(g, jac_g_coo, (g(x).size, x.size))
+    hes_f_sp = sparse_hessian(f, hes_f_coo, (f(x).size, x.size, x.size))
+    hes_h_sp = sparse_hessian(h, hes_h_coo, (h(x).size, x.size, x.size))
+    hes_g_sp = sparse_hessian(g, hes_g_coo, (g(x).size, x.size, x.size))
 
     def get_dense(sp, coo, shape):
         jac_f_dense = np.zeros(shape)
-        for _sp, _coo in zip(sp, coo):
+        for _sp, _coo in zip(sp.data, coo):
             jac_f_dense[*_coo] = _sp
         return jac_f_dense
     
     def test_dense_jac(f, f_sp, coo, x):
-        if coo is None: return None
+        # if coo is None: return None
         f_out = f(x)
         f_dense = get_dense(f_sp(x), coo, f_out.shape)
         discrepancy = np.max(np.abs(f_out - f_dense))
         assert discrepancy <= 1e-6
 
     def test_dense_hess(f, f_sp, coo, x, plot=False):
-        if coo is None: return None
+        # if coo is None: return None
         f_out = f(x)
         f_dense = get_dense(f_sp(x), coo, f_out.shape)
         discrepancy = np.max(np.abs(f_out - f_dense))
@@ -265,7 +302,7 @@ if __name__ == "__main__":
         assert discrepancy <= 1e-6
 
     def test_coo(f, coos, x):
-        if coos is None: return None
+        # if coos is None: return None
         outs = f(x)
         sum = np.array(0.)
         for coo in coos:
