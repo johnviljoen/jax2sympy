@@ -79,13 +79,7 @@ def get_sparsity_pattern(f, x, type='hessian'): # "jacobian" or "hessian"
         get_const_idx = []
         const_shapes = []
         for const in sym_constants:
-            # print(const.ndim)
-            # TESTING
-            # the old:
             indices = [int(c.split('_')[-1]) for c in map(str, const.ravel())]
-            # the experimental:
-            # extract_index = lambda s: int(str(s).split("_")[-1])
-            # indices = np.vectorize(extract_index)(const)
             get_const_idx.append({k: v for k, v in zip(const.ravel(), indices)})
             const_shapes.append(list(const.shape))
         out_shapes = []
