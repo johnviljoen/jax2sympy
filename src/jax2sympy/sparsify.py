@@ -79,8 +79,14 @@ def get_sparsity_pattern(f, x, type='hessian'): # "jacobian" or "hessian"
         get_const_idx = []
         const_shapes = []
         for const in sym_constants:
-            indices = [int(c.split('_')[-1]) for c in map(str, const)]
-            get_const_idx.append({k: v for k, v in zip(const, indices)})
+            # print(const.ndim)
+            # TESTING
+            # the old:
+            indices = [int(c.split('_')[-1]) for c in map(str, const.ravel())]
+            # the experimental:
+            # extract_index = lambda s: int(str(s).split("_")[-1])
+            # indices = np.vectorize(extract_index)(const)
+            get_const_idx.append({k: v for k, v in zip(const.ravel(), indices)})
             const_shapes.append(list(const.shape))
         out_shapes = []
         for out_sym in out_syms:
@@ -251,7 +257,10 @@ if __name__ == "__main__":
     from problems import mpc
     import matplotlib.pyplot as plt
 
-    f, h, g, x, gt, aux = mpc.quadcopter_nav(N=3) # scales to at least N=500 - seems pretty linear, no strict tests
+    # f, h, g, x, gt, aux = mpc.quadcopter_nav(N=3) # scales to at least N=500 - seems pretty linear, no strict tests
+    # f, h, g, x, _, _ = mpc.linear()
+    f, h, g, x, _, _ = mpc.nonlinear()
+
 
     jac_f_coo = get_sparsity_pattern(f, x, type="jacobian")
     hes_f_coo = get_sparsity_pattern(f, x, type="hessian" )

@@ -104,7 +104,7 @@ def _sym_iota(eqn):
     ).repeat(np.prod(shape) // shape[dimension], axis=dimension).reshape(shape)
 
 def _sym_split(inexprs, eqn):
-    print("WARNING: check functionality of split")
+    # print("WARNING: check functionality of split")
     sizes = eqn.params["sizes"]
     axis = eqn.params["axis"]
     assert len(inexprs) == 1
@@ -236,7 +236,7 @@ def _sym_scatter(operand, scatter_indices, updates, dimension_numbers, mode):
         return mapping
 
     for update_index in np.ndindex(*updates.shape):
-        print(update_index)
+        # print(update_index)
         # Step 1: Extract G from update_index
         G = [update_index[dim] for dim in update_scatter_dims]
 
