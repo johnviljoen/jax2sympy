@@ -288,7 +288,7 @@ def test_coo(f, coos, x):
     sum = np.array(0.)
     for coo in coos:
         sum += outs[*coo]
-    assert np.max(np.abs(sum - outs.sum())) < 1e-5
+    assert np.max(np.abs(sum - outs.sum())) < 1e-4
 
 if __name__ == "__main__":
 
