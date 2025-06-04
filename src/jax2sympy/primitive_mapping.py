@@ -1,7 +1,7 @@
 import jax
 import sympy as sy
 import numpy as np
-from jax.core import Literal
+from jax.extend.core import Literal
 
 # elementwise
 _sym_add = lambda a, b: a + b

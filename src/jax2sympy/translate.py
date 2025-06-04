@@ -1,4 +1,4 @@
-from jax.core import Literal
+from jax.extend.core import Literal
 import sympy as sy
 from jax2sympy.primitive_mapping import primitive_to_sympy_op
 import numpy as np
@@ -87,7 +87,7 @@ if __name__ == "__main__":
 
     import jax
     import jax.numpy as jnp
-    from problems import mpc
+    from jax2sympy.problems import mpc
 
     f, h, g, x0, gt, aux = mpc.quadcopter_nav(N=3) # N=100
     

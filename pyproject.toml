@@ -16,7 +16,7 @@ keywords = [""]
 dependencies = [
     "matplotlib",
     "tqdm",
-    "jax[cuda12]",
+    "jax", # [cuda12]",
     "sympy" # symbolic derivations
 ]
 

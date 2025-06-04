@@ -246,9 +246,53 @@ def sparse_hessian(f, hes_coo, out_shape):
 
     return hess_fn
 
+### Testing
+
+def get_dense(sp, coo, shape):
+    jac_f_dense = np.zeros(shape)
+    for _sp, _coo in zip(sp.data, coo):
+        jac_f_dense[*_coo] = _sp
+    return jac_f_dense
+
+def test_dense_jac(f, f_sp, coo, x):
+    # if coo is None: return None
+    f_out = f(x)
+    f_dense = get_dense(f_sp(x), coo, f_out.shape)
+    discrepancy = np.max(np.abs(f_out - f_dense))
+    assert discrepancy <= 1e-6
+
+def test_dense_hess(f, f_sp, coo, x, plot=False):
+    # if coo is None: return None
+    f_out = f(x)
+    f_dense = get_dense(f_sp(x), coo, f_out.shape)
+    discrepancy = np.max(np.abs(f_out - f_dense))
+    if plot is True:
+        x_values = coo[:, 1]
+        y_values = coo[:, 2]
+        plt.figure()
+        im1 = plt.imshow(jnp.sum(f_out, axis=0), cmap='viridis')  # You can change the colormap if needed
+        plt.colorbar(im1)  # Add colorbar
+        plt.savefig('test_ctrl.png', dpi=500)
+        plt.close()
+        plt.figure()
+        im2 = plt.imshow(jnp.sum(f_dense, axis=0), cmap='viridis')
+        plt.colorbar(im2)  # Add colorbar
+        plt.scatter(x_values, y_values, marker='o', alpha=0.7)
+        plt.savefig('test_hess_h_coo.png', dpi=500)
+        plt.close()
+    assert discrepancy <= 1e-6
+
+def test_coo(f, coos, x):
+    # if coos is None: return None
+    outs = f(x)
+    sum = np.array(0.)
+    for coo in coos:
+        sum += outs[*coo]
+    assert np.max(np.abs(sum - outs.sum())) < 1e-5
+
 if __name__ == "__main__":
 
-    from problems import mpc
+    from jax2sympy.problems import mpc
     import matplotlib.pyplot as plt
 
     # f, h, g, x, gt, aux = mpc.quadcopter_nav(N=3) # scales to at least N=500 - seems pretty linear, no strict tests
@@ -270,47 +314,6 @@ if __name__ == "__main__":
     hes_h_sp = sparse_hessian(h, hes_h_coo, (h(x).size, x.size, x.size))
     hes_g_sp = sparse_hessian(g, hes_g_coo, (g(x).size, x.size, x.size))
 
-    def get_dense(sp, coo, shape):
-        jac_f_dense = np.zeros(shape)
-        for _sp, _coo in zip(sp.data, coo):
-            jac_f_dense[*_coo] = _sp
-        return jac_f_dense
-    
-    def test_dense_jac(f, f_sp, coo, x):
-        # if coo is None: return None
-        f_out = f(x)
-        f_dense = get_dense(f_sp(x), coo, f_out.shape)
-        discrepancy = np.max(np.abs(f_out - f_dense))
-        assert discrepancy <= 1e-6
-
-    def test_dense_hess(f, f_sp, coo, x, plot=False):
-        # if coo is None: return None
-        f_out = f(x)
-        f_dense = get_dense(f_sp(x), coo, f_out.shape)
-        discrepancy = np.max(np.abs(f_out - f_dense))
-        if plot is True:
-            x_values = coo[:, 1]
-            y_values = coo[:, 2]
-            plt.figure()
-            im1 = plt.imshow(jnp.sum(f_out, axis=0), cmap='viridis')  # You can change the colormap if needed
-            plt.colorbar(im1)  # Add colorbar
-            plt.savefig('test_ctrl.png', dpi=500)
-            plt.close()
-            plt.figure()
-            im2 = plt.imshow(jnp.sum(f_dense, axis=0), cmap='viridis')
-            plt.colorbar(im2)  # Add colorbar
-            plt.scatter(x_values, y_values, marker='o', alpha=0.7)
-            plt.savefig('test_hess_h_coo.png', dpi=500)
-            plt.close()
-        assert discrepancy <= 1e-6
-
-    def test_coo(f, coos, x):
-        # if coos is None: return None
-        outs = f(x)
-        sum = np.array(0.)
-        for coo in coos:
-            sum += outs[*coo]
-        assert np.max(np.abs(sum - outs.sum())) < 1e-5
 
     print("testing coos correctness...")
     test_coo(jax.jacrev(f), jac_f_coo, x)
