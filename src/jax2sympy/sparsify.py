@@ -295,9 +295,9 @@ if __name__ == "__main__":
     from jax2sympy.problems import mpc
     import matplotlib.pyplot as plt
 
-    # f, h, g, x, gt, aux = mpc.quadcopter_nav(N=3) # scales to at least N=500 - seems pretty linear, no strict tests
+    f, h, g, x, gt, aux = mpc.quadcopter_nav(N=3) # scales to at least N=500 - seems pretty linear, no strict tests
     # f, h, g, x, _, _ = mpc.linear()
-    f, h, g, x, _, _ = mpc.nonlinear()
+    # f, h, g, x, _, _ = mpc.nonlinear()
 
 
     jac_f_coo = get_sparsity_pattern(f, x, type="jacobian")

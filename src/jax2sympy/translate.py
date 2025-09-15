@@ -60,7 +60,7 @@ def jaxpr_to_sympy_expressions(jaxpr, var2sym=dict(), x_cnt=0, c_cnt=0):
     for i, eqn in enumerate(jaxpr.eqns):
         # print(f"eqn number: {i}")
         # print(f"eqn: {eqn}")
-        if eqn.primitive.name == "pjit":
+        if eqn.primitive.name in ("pjit", "jit"):
             _jaxpr = eqn.params.get("jaxpr", None)
             sub_syms_out, sub_var2sym, x_cnt, c_cnt = jaxpr_to_sympy_expressions(_jaxpr, var2sym={}, x_cnt=x_cnt, c_cnt=c_cnt)
             syms_in = get_sym_invar(eqn.invars, var2sym)

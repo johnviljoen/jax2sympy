@@ -41,6 +41,17 @@ def _sym_reduce_sum(a, eqn):
     assert len(a) == 1
     return np.sum(a[0], axis=eqn.params["axes"])
 
+def _sym_transpose(a, eqn):
+    print("WARNING: _sym_transpose not validated and is in use")
+    perm = (
+        eqn.params.get("permutation")            # canonical in JAX
+        or eqn.params.get("axes")                # NumPy nomenclature, just in case
+        or eqn.params.get("dims")                # older/internal spelling
+    )
+    if perm is None:
+        perm = tuple(range(a.ndim))[::-1]
+    return np.transpose(a, axes=perm)
+
 # add any for our purposes is just add
 def _sym_add_any(inexprs):
     # Use broadcasting to add arrays sequentially
@@ -50,10 +61,25 @@ def _sym_add_any(inexprs):
     return result
 
 def _sym_select_n(inexprs):
-    boolean = inexprs[0]
-    true_arr = inexprs[1]
-    false_arr = inexprs[2]
-    return np.where(boolean, true_arr, false_arr)
+    # boolean = inexprs[0]
+    # true_arr = inexprs[1]
+    # false_arr = inexprs[2]
+    # return np.where(boolean, true_arr, false_arr)
+
+    pred, true_val, false_val = inexprs
+
+    # Fast-path: real booleans → we can still delegate to NumPy
+    if pred.dtype != object and pred.dtype == bool:
+        return np.where(pred, true_val, false_val)
+    
+    print("WARNING: _sym_select_n symbolic path not validated and in use")
+
+    # General symbolic path: element-wise Piecewise
+    piecewise_fn = np.vectorize(
+        lambda p, t, f: sy.Piecewise((t, p), (f, True)),
+        otypes=[object],
+    )
+    return piecewise_fn(pred, true_val, false_val)
 
 def _sym_pad(inexprs, eqn):
 
@@ -85,7 +111,9 @@ def _sym_pad(inexprs, eqn):
 _sym_convert_element_type = lambda a: a
 
 def _sym_reshape(a, new_sizes, dimensions):
-    if dimensions is None:
+    # if 0 in dimensions:
+    #     print("WARNING: using _sym_reshape with 0 dimensions is not validated and is happening")
+    if dimensions is None or 0 in dimensions:
         a = a.reshape(*new_sizes)
     else:
         raise NotImplementedError
