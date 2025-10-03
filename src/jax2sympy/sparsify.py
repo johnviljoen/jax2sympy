@@ -123,23 +123,23 @@ def sparse_jacobian(f, jac_coo, out_shape):
     # CASE 1: vector-valued function: R^n -> R^m
     #         Each row in jac_coo is [out_idx, x_idx]
     if ncols > 1:  
-        def partial_out_j(x, out_idx, x_idx):
+        def partial_out_j(x, out_idx, x_idx, *args):
             """
             Computes d(f_out_idx)(x)/dx_x_idx = partial derivative of the out_idx-th
             component of f w.r.t. the x_idx-th component of x.
             """
             # grad_f_out is the gradient of f(...)[out_idx], i.e. R^n -> scalar
-            grad_f_out = jax.grad(lambda z: f(z)[out_idx])(x)
+            grad_f_out = jax.grad(lambda z: f(z)[out_idx])(x, *args)
             return grad_f_out[x_idx]
 
-        def jac_fn(x):
+        def jac_fn(x, *args):
             """
             Evaluate all requested Jacobian entries at x,
             and store them in a BCOO with coords=jac_coo, data=the partials.
             """
             def single_entry(coord):
                 out_idx, x_idx = coord
-                return partial_out_j(x, out_idx, x_idx)
+                return partial_out_j(x, out_idx, x_idx, *args)
 
             # Vectorize over rows of jac_coo to get all partial derivatives
             out = jax.vmap(single_entry)(jac_coo)
@@ -149,17 +149,17 @@ def sparse_jacobian(f, jac_coo, out_shape):
     # CASE 2: scalar-valued function: R^n -> R
     #         Each row in jac_coo is [x_idx]
     elif ncols == 1:
-        def partial_j(x, x_idx):
+        def partial_j(x, x_idx, *args):
             """
             Computes d f(x)/dx_x_idx for a scalar function f.
             """
-            grad_f = jax.grad(f)(x)  # shape (n,)
+            grad_f = jax.grad(f)(x, *args)  # shape (n,)
             return grad_f[x_idx]
 
-        def jac_fn(x):
+        def jac_fn(x, *args):
             def single_entry(coord):
                 x_idx = coord[0]
-                return partial_j(x, x_idx)
+                return partial_j(x, x_idx, *args)
 
             out = jax.vmap(single_entry)(jac_coo)
             return BCOO((out, jac_coo), shape=out_shape)
@@ -189,7 +189,7 @@ def sparse_hessian(f, hes_coo, out_shape):
 
     if ncols > 2:
 
-        def partial_out_ij(x, out_idx, i, j):
+        def partial_out_ij(x, out_idx, i, j, *args):
             """
             Compute d^2 f_{out_idx}(x) / (dx_i dx_j).
             That is: first derivative w.r.t. x_i, then derivative of that result w.r.t. x_j.
@@ -199,19 +199,19 @@ def sparse_hessian(f, hes_coo, out_shape):
             #    i.e., pick out the i-th component from jax.grad(f_{out_idx})(u).
             #    f_{out_idx}(u) means f(u)[out_idx].
             def g_i(u):
-                return jax.grad(lambda z: f(z)[out_idx])(u)[i]
+                return jax.grad(lambda z: f(z)[out_idx])(u, *args)[i]
 
             # 2) Now take derivative of g_i w.r.t. x_j
             #    i.e. second partial derivative.
             return jax.grad(g_i)(x)[j]
 
-        def hess_fn(x):
+        def hess_fn(x, *args):
             """
             Evaluate all requested Hessian entries at x and return them as a 1D array.
             """
             def single_entry(coord):
                 out_idx, i, j = coord
-                return partial_out_ij(x, out_idx, i, j)
+                return partial_out_ij(x, out_idx, i, j, *args)
 
             # Vectorize over rows of hes_coo
             out = jax.vmap(single_entry)(hes_coo)
@@ -219,7 +219,7 @@ def sparse_hessian(f, hes_coo, out_shape):
         
     elif ncols == 2:
 
-        def partial_ij(x, i, j):
+        def partial_ij(x, i, j, *args):
             """
             Compute d^2 f(x) / (dx_i dx_j).
             That is: first derivative w.r.t. x_i, then derivative of that result w.r.t. x_j.
@@ -227,18 +227,18 @@ def sparse_hessian(f, hes_coo, out_shape):
             # 1) g_i(u) = derivative of f(u) w.r.t. x_i
             #    jax.grad(f)(u) is a vector, pick out component i
             def g_i(u):
-                return jax.grad(f)(u)[i]
+                return jax.grad(f)(u, *args)[i]
 
             # 2) derivative of g_i(u) w.r.t. x_j
             return jax.grad(g_i)(x)[j]
 
-        def hess_fn(x):
+        def hess_fn(x, *args):
             """
             Evaluate all requested Hessian entries at x and return them as a 1D array.
             """
             def single_entry(coord):
                 i, j = coord
-                return partial_ij(x, i, j)
+                return partial_ij(x, i, j, *args)
 
             # Vectorize over rows of hes_coo
             out = jax.vmap(single_entry)(hes_coo)
@@ -294,26 +294,31 @@ if __name__ == "__main__":
 
     from jax2sympy.problems import mpc
     import matplotlib.pyplot as plt
+    from datetime import datetime
 
     f, h, g, x, gt, aux = mpc.quadcopter_nav(N=3) # scales to at least N=500 - seems pretty linear, no strict tests
     # f, h, g, x, _, _ = mpc.linear()
     # f, h, g, x, _, _ = mpc.nonlinear()
 
-
+    t1 = datetime.now()
     jac_f_coo = get_sparsity_pattern(f, x, type="jacobian")
     hes_f_coo = get_sparsity_pattern(f, x, type="hessian" )
     jac_h_coo = get_sparsity_pattern(h, x, type="jacobian")
     hes_h_coo = get_sparsity_pattern(h, x, type="hessian" )
     jac_g_coo = get_sparsity_pattern(g, x, type="jacobian")
     hes_g_coo = get_sparsity_pattern(g, x, type="hessian" )
+    t2 = datetime.now()
+    print(f"time to detect sparsity: {t2-t1}")
 
+    t1 = datetime.now()
     jac_f_sp = sparse_jacobian(f, jac_f_coo, (f(x).size, x.size))
     jac_h_sp = sparse_jacobian(h, jac_h_coo, (h(x).size, x.size))
     jac_g_sp = sparse_jacobian(g, jac_g_coo, (g(x).size, x.size))
     hes_f_sp = sparse_hessian(f, hes_f_coo, (f(x).size, x.size, x.size))
     hes_h_sp = sparse_hessian(h, hes_h_coo, (h(x).size, x.size, x.size))
     hes_g_sp = sparse_hessian(g, hes_g_coo, (g(x).size, x.size, x.size))
-
+    t2 = datetime.now()
+    print(f"time to create sparse jacs/hess's: {t2-t1}")
 
     print("testing coos correctness...")
     test_coo(jax.jacrev(f), jac_f_coo, x)
