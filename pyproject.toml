@@ -22,6 +22,6 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = [
-    "src", "problems", "jax2sympy"
+    "src"# , "problems", "jax2sympy"
 ]  # list of folders that contain the packages (["."] by default)
 
