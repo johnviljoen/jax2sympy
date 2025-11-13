@@ -107,7 +107,7 @@ def sparse_jacobian(f, jac_coo, out_shape):
 
     if len(jac_coo) == 0:
         # indicates that there isn't a function or no known Jacobian pattern
-        return lambda x: BCOO([jnp.array([]), jnp.zeros([0, len(out_shape)], dtype=jnp.int32)], shape=out_shape)
+        return lambda x, *args: BCOO([jnp.array([]), jnp.zeros([0, len(out_shape)], dtype=jnp.int32)], shape=out_shape)
 
     # Ensure jac_coo is a JAX array of int
     jac_coo = jnp.array(jac_coo, dtype=jnp.int32)
@@ -129,7 +129,7 @@ def sparse_jacobian(f, jac_coo, out_shape):
             component of f w.r.t. the x_idx-th component of x.
             """
             # grad_f_out is the gradient of f(...)[out_idx], i.e. R^n -> scalar
-            grad_f_out = jax.grad(lambda z: f(z)[out_idx])(x, *args)
+            grad_f_out = jax.grad(lambda z, *args: f(z, *args)[out_idx])(x, *args)
             return grad_f_out[x_idx]
 
         def jac_fn(x, *args):
@@ -153,7 +153,7 @@ def sparse_jacobian(f, jac_coo, out_shape):
             """
             Computes d f(x)/dx_x_idx for a scalar function f.
             """
-            grad_f = jax.grad(f)(x, *args)  # shape (n,)
+            grad_f = jax.grad(lambda z, *args: f(z, *args).squeeze())(x, *args)  # shape (n,)
             return grad_f[x_idx]
 
         def jac_fn(x, *args):
@@ -177,7 +177,7 @@ def sparse_hessian(f, hes_coo, out_shape):
 
     if len(hes_coo) == 0:
         # indicates that there isn't a function / or no known Hessian pattern
-        return lambda x: BCOO([jnp.array([]), jnp.zeros([0, len(out_shape)], dtype=jnp.int32)], shape=out_shape)
+        return lambda x, *args: BCOO([jnp.array([]), jnp.zeros([0, len(out_shape)], dtype=jnp.int32)], shape=out_shape)
 
     # Ensure hes_coo is a JAX array of int
     hes_coo = jnp.array(hes_coo, dtype=jnp.int32)
@@ -199,7 +199,7 @@ def sparse_hessian(f, hes_coo, out_shape):
             #    i.e., pick out the i-th component from jax.grad(f_{out_idx})(u).
             #    f_{out_idx}(u) means f(u)[out_idx].
             def g_i(u):
-                return jax.grad(lambda z: f(z)[out_idx])(u, *args)[i]
+                return jax.grad(lambda z, *args: f(z, *args)[out_idx])(u, *args)[i]
 
             # 2) Now take derivative of g_i w.r.t. x_j
             #    i.e. second partial derivative.
@@ -227,7 +227,7 @@ def sparse_hessian(f, hes_coo, out_shape):
             # 1) g_i(u) = derivative of f(u) w.r.t. x_i
             #    jax.grad(f)(u) is a vector, pick out component i
             def g_i(u):
-                return jax.grad(f)(u, *args)[i]
+                return jax.grad(lambda z, *args: f(z, *args).squeeze())(u, *args)[i]
 
             # 2) derivative of g_i(u) w.r.t. x_j
             return jax.grad(g_i)(x)[j]
@@ -354,3 +354,4 @@ if __name__ == "__main__":
     # # hes_h_sp = sparse_jacobian_sparse_matrix_input(jac_h_sp, hes_h_coo)# , x.shape, [*h(x).shape, *x.shape, *x.shape])
     # test_dense_hess(jax.hessian(h), hes_h_sp, hes_h_coo, x)
 
+    pass

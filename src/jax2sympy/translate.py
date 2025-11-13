@@ -1,4 +1,6 @@
 from jax.extend.core import Literal
+# jax 0.8.0 introduced TypnedNdArrays
+from jax._src.literals import TypedNdArray, TypedInt, TypedFloat, TypedComplex
 import sympy as sy
 from jax2sympy.primitive_mapping import primitive_to_sympy_op
 import numpy as np
@@ -8,7 +10,7 @@ def get_sym_invar(invars, var2sym):
     for inv in invars:
         if isinstance(inv, Literal):
             val = inv.val
-            if isinstance(val, float) or isinstance(val, int) or isinstance(val, np.ndarray):
+            if isinstance(val, float) or isinstance(val, int) or isinstance(val, np.ndarray) or isinstance(val, TypedNdArray):
                 inexprs.append(np.asarray(val))
             else:
                 raise Exception("unknown jax core Literal encountered in jaxpr")
@@ -101,7 +103,10 @@ if __name__ == "__main__":
         else:
             prims.append(prim)
 
-        if prim != 'pjit':
+        if prim == 'pjit':
+            print("pjit found")
+
+        if prim != 'pjit' and prim != 'jit':
             assert prim in primitive_to_sympy_op.keys()
 
     out_syms, var2sym, x_cnt, c_cnt = jaxpr_to_sympy_expressions(jaxpr)

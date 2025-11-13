@@ -6,8 +6,12 @@ def func(x, y, z, a, b, c):
 
 x = y = z = a = b = c = jnp.float32(2.0)
 
-print(jax.make_jaxpr(jax.jacobian(func, argnums=jnp.arange(6)))(x, y, z, a, b, c))
+# print(jax.make_jaxpr(jax.jacobian(func))(x, y, z, a, b, c))
 
+def func(x):
+    return jnp.sin(x + 1)
 
+print(jax.make_jaxpr(func)(x))
+print(jax.make_jaxpr(jax.grad(func))(x))
 
 pass
