@@ -63,7 +63,7 @@ def jaxpr_to_sympy_expressions(jaxpr, var2sym=dict(), x_cnt=0, c_cnt=0):
     # def sub_consts(var2sym, consts):
     #     const_idx = 0
     #     for key, arr in list(var2sym.items()):
-    #         # Ensure 'arr' is an array of object (sympy-like) and check if *all* 
+    #         # Ensure 'arr' is an array of object (sympy-like) and check if *all*
     #           entries start with 'c'
     #         if (isinstance(arr, np.ndarray) and arr.dtype == object
     #             and all(str(sym).startswith('c') for sym in arr.ravel())):

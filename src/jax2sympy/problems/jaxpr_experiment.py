@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 
 
-#def func(x, y, z, a, b, c):
+# def func(x, y, z, a, b, c):
 #    return jnp.float32([jnp.sin(x), y, jnp.exp(z)])
 #
 #

@@ -36,8 +36,8 @@ def _sym_sparse_jacobian(inp_shape, out_flat, out_shape, get_var_idx):
 
 
 def get_sparsity_pattern(f, x, type="hessian"):  # "jacobian" or "hessian"
-    """ A helper function doing setup and low level calls of other functions in the file
-    to get the final desired sparsity pattern of a jacobian or hessian of a given 
+    """A helper function doing setup and low level calls of other functions in the file
+    to get the final desired sparsity pattern of a jacobian or hessian of a given
     function.
     """
     jaxpr = jax.make_jaxpr(f)(x)
@@ -75,7 +75,7 @@ def get_sparsity_pattern(f, x, type="hessian"):  # "jacobian" or "hessian"
         return np.array(sym_jac_coo)
 
     if type == "hessian":
-        # calculate the sparsity pattern of the hessian by first creating the jacobian 
+        # calculate the sparsity pattern of the hessian by first creating the jacobian
         # in sympy
         num_inputs = len(jaxpr.jaxpr.invars)
         num_constants = len(jaxpr.jaxpr.constvars)
@@ -223,7 +223,7 @@ def sparse_hessian(f, hes_coo, out_shape):
     if ncols > 2:
 
         def partial_out_ij(x, out_idx, i, j, *args):
-            """ Compute d^2 f_{out_idx}(x) / (dx_i dx_j). That is: first derivative 
+            """Compute d^2 f_{out_idx}(x) / (dx_i dx_j). That is: first derivative
             w.r.t. x_i, then derivative of that result w.r.t. x_j.
             """
 
@@ -261,7 +261,7 @@ def sparse_hessian(f, hes_coo, out_shape):
 
         def partial_ij(x, i, j, *args):
             """
-            Compute d^2 f(x) / (dx_i dx_j). That is: first derivative w.r.t. x_i, then 
+            Compute d^2 f(x) / (dx_i dx_j). That is: first derivative w.r.t. x_i, then
             derivative of that result w.r.t. x_j.
             """
 
