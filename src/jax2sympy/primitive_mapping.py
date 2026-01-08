@@ -8,14 +8,14 @@ _sym_add = lambda a, b: a + b
 _sym_sub = lambda a, b: a - b
 _sym_mul = lambda a, b: a * b
 _sym_div = lambda a, b: a / b
-_sym_pow = lambda a, b: a ** b
-_sym_integer_pow = lambda a, exp: a ** exp
-_sym_neg = lambda a:  -a
-_sym_exp = lambda a:  np.vectorize(sy.exp)(a)
-_sym_log = lambda a:  np.vectorize(sy.log)(a)
-_sym_sin = lambda a:  np.vectorize(sy.sin)(a)
-_sym_cos = lambda a:  np.vectorize(sy.cos)(a)
-_sym_tan = lambda a:  np.vectorize(sy.tan)(a)
+_sym_pow = lambda a, b: a**b
+_sym_integer_pow = lambda a, exp: a**exp
+_sym_neg = lambda a: -a
+_sym_exp = lambda a: np.vectorize(sy.exp)(a)
+_sym_log = lambda a: np.vectorize(sy.log)(a)
+_sym_sin = lambda a: np.vectorize(sy.sin)(a)
+_sym_cos = lambda a: np.vectorize(sy.cos)(a)
+_sym_tan = lambda a: np.vectorize(sy.tan)(a)
 _sym_asin = lambda a: np.vectorize(sy.asin)(a)
 _sym_acos = lambda a: np.vectorize(sy.acos)(a)
 _sym_atan = lambda a: np.vectorize(sy.atan)(a)
@@ -24,33 +24,36 @@ _sym_cosh = lambda a: np.vectorize(sy.cosh)(a)
 _sym_tanh = lambda a: np.vectorize(sy.tanh)(a)
 _sym_sqrt = lambda a: np.vectorize(sy.sqrt)(a)
 _sym_sign = lambda a: np.vectorize(sy.sign)(a)
-_sym_eq = lambda a, b:  np.vectorize(lambda a, b: int(a == b))(a, b)
-_sym_ne = lambda a, b:  np.vectorize(sy.Ne)(a, b)
-_sym_lt = lambda a, b:  np.vectorize(sy.StrictLessThan)(a, b)
-_sym_le = lambda a, b:  np.vectorize(sy.LessThan)(a, b)
-_sym_gt = lambda a, b:  np.vectorize(sy.StrictGreaterThan)(a, b)
-_sym_ge = lambda a, b:  np.vectorize(sy.GreaterThan)(a, b)
+_sym_eq = lambda a, b: np.vectorize(lambda a, b: int(a == b))(a, b)
+_sym_ne = lambda a, b: np.vectorize(sy.Ne)(a, b)
+_sym_lt = lambda a, b: np.vectorize(sy.StrictLessThan)(a, b)
+_sym_le = lambda a, b: np.vectorize(sy.LessThan)(a, b)
+_sym_gt = lambda a, b: np.vectorize(sy.StrictGreaterThan)(a, b)
+_sym_ge = lambda a, b: np.vectorize(sy.GreaterThan)(a, b)
 _sym_and = lambda a, b: np.vectorize(sy.And)(a, b)
-_sym_or = lambda a, b:  np.vectorize(sy.Or)(a, b)
-_sym_not = lambda a:    np.vectorize(sy.Not)(a)
+_sym_or = lambda a, b: np.vectorize(sy.Or)(a, b)
+_sym_not = lambda a: np.vectorize(sy.Not)(a)
 _sym_max = lambda a, b: np.vectorize(sy.Max)(a, b)
 _sym_min = lambda a, b: np.vectorize(sy.Min)(a, b)
+
 
 # array
 def _sym_reduce_sum(a, eqn):
     assert len(a) == 1
     return np.sum(a[0], axis=eqn.params["axes"])
 
+
 def _sym_transpose(a, eqn):
     print("WARNING: _sym_transpose not validated and is in use")
     perm = (
-        eqn.params.get("permutation")            # canonical in JAX
-        or eqn.params.get("axes")                # NumPy nomenclature, just in case
-        or eqn.params.get("dims")                # older/internal spelling
+        eqn.params.get("permutation")  # canonical in JAX
+        or eqn.params.get("axes")  # NumPy nomenclature, just in case
+        or eqn.params.get("dims")  # older/internal spelling
     )
     if perm is None:
         perm = tuple(range(a.ndim))[::-1]
     return np.transpose(a, axes=perm)
+
 
 # add any for our purposes is just add
 def _sym_add_any(inexprs):
@@ -59,6 +62,7 @@ def _sym_add_any(inexprs):
     for array in inexprs[1:]:
         result = np.add(result, array)  # np.add handles broadcasting
     return result
+
 
 def _sym_select_n(inexprs):
     # boolean = inexprs[0]
@@ -71,7 +75,7 @@ def _sym_select_n(inexprs):
     # Fast-path: real booleans → we can still delegate to NumPy
     if pred.dtype != object and pred.dtype == bool:
         return np.where(pred, true_val, false_val)
-    
+
     print("WARNING: _sym_select_n symbolic path not validated and in use")
 
     # General symbolic path: element-wise Piecewise
@@ -81,8 +85,8 @@ def _sym_select_n(inexprs):
     )
     return piecewise_fn(pred, true_val, false_val)
 
-def _sym_pad(inexprs, eqn):
 
+def _sym_pad(inexprs, eqn):
     assert len(inexprs) == 2
 
     inexpr = inexprs[0]
@@ -97,7 +101,7 @@ def _sym_pad(inexprs, eqn):
 
     # Create an array filled with the padding value
     result = np.full(padded_shape, padding_value, dtype=inexpr.dtype)
-    
+
     # Calculate slices to place the original array into the padded result
     insert_slices = tuple(
         slice(low, low + inexpr.shape[i] * (interior + 1), interior + 1)
@@ -108,7 +112,9 @@ def _sym_pad(inexprs, eqn):
     result[insert_slices] = inexpr
     return result
 
+
 _sym_convert_element_type = lambda a: a
+
 
 def _sym_reshape(a, new_sizes, dimensions):
     # if 0 in dimensions:
@@ -119,17 +125,23 @@ def _sym_reshape(a, new_sizes, dimensions):
         raise NotImplementedError
     return a
 
+
 def _sym_squeeze(a, dimensions):
     slices = [0 if i in dimensions else slice(None) for i in range(a.ndim)]
     return a[tuple(slices)]
+
 
 # builds an array on device - this can be simplified
 def _sym_iota(eqn):
     shape = eqn.params["shape"]
     dimension = eqn.params["dimension"]
-    return np.arange(shape[dimension]).reshape(
-        [1 if i != dimension else shape[dimension] for i in range(len(shape))]
-    ).repeat(np.prod(shape) // shape[dimension], axis=dimension).reshape(shape)
+    return (
+        np.arange(shape[dimension])
+        .reshape([1 if i != dimension else shape[dimension] for i in range(len(shape))])
+        .repeat(np.prod(shape) // shape[dimension], axis=dimension)
+        .reshape(shape)
+    )
+
 
 def _sym_split(inexprs, eqn):
     # print("WARNING: check functionality of split")
@@ -139,6 +151,7 @@ def _sym_split(inexprs, eqn):
     operand = inexprs[0]
     indices = np.cumsum(sizes[:-1])  # Calculate split indices
     return np.split(operand, indices, axis=axis)
+
 
 def _sym_slice(a, start_indices, limit_indices, strides):
     axis_slice = []
@@ -150,9 +163,11 @@ def _sym_slice(a, start_indices, limit_indices, strides):
             axis_slice.append([start, limit, 1])
     return a[tuple([slice(s[0], s[1], s[2]) for s in axis_slice])]
 
-def _sym_dot_general(a, b, eqn):
 
-    (contracting_dims_A, contracting_dims_B), (batch_dims_A, batch_dims_B) = eqn.params.get("dimension_numbers", None)
+def _sym_dot_general(a, b, eqn):
+    (contracting_dims_A, contracting_dims_B), (batch_dims_A, batch_dims_B) = (
+        eqn.params.get("dimension_numbers", None)
+    )
 
     a_ein = [chr(97 + i) for i in range(len(a.shape))]
     b_ein = [chr(97 + i) for i in range(len(a_ein), len(b.shape) + len(a_ein))]
@@ -162,19 +177,19 @@ def _sym_dot_general(a, b, eqn):
 
     # form output shape - contracting dimension removed from larger dimension input
     if len(a.shape) >= len(b.shape):
-        out_ein = a_ein[:contracting_dims_A[0]] + a_ein[contracting_dims_A[0] + 1:]
+        out_ein = a_ein[: contracting_dims_A[0]] + a_ein[contracting_dims_A[0] + 1 :]
     else:
-        out_ein = b_ein[:contracting_dims_B[0]] + b_ein[contracting_dims_B[0] + 1:]
+        out_ein = b_ein[: contracting_dims_B[0]] + b_ein[contracting_dims_B[0] + 1 :]
 
     # form strings from lists of characters
-    a_ein = ''.join(a_ein)
-    b_ein = ''.join(b_ein)
-    out_ein = ''.join(out_ein)
+    a_ein = "".join(a_ein)
+    b_ein = "".join(b_ein)
+    out_ein = "".join(out_ein)
 
     return np.einsum(f"{a_ein},{b_ein}->{out_ein}", a, b)
 
+
 def _sym_gather(operand, start_indices, dimension_numbers, slice_sizes, mode):
-    
     # Unpack dimension numbers
     offset_dims = dimension_numbers.offset_dims
     # only can handle one offset dim rn
@@ -186,9 +201,15 @@ def _sym_gather(operand, start_indices, dimension_numbers, slice_sizes, mode):
     index_vector_dim = len(start_indices.shape) - 1
 
     # Initialize the output shape
-    batch_dims = [dim for dim in range(len(start_indices.shape)) if dim != index_vector_dim]
+    batch_dims = [
+        dim for dim in range(len(start_indices.shape)) if dim != index_vector_dim
+    ]
     batch_shape = [start_indices.shape[d] for d in batch_dims]
-    offset_shape = [slice_sizes[dim] for dim in range(len(slice_sizes)) if dim not in collapsed_slice_dims]
+    offset_shape = [
+        slice_sizes[dim]
+        for dim in range(len(slice_sizes))
+        if dim not in collapsed_slice_dims
+    ]
     output_shape = batch_shape + offset_shape
     output = np.empty(output_shape, dtype=operand.dtype)
 
@@ -196,7 +217,9 @@ def _sym_gather(operand, start_indices, dimension_numbers, slice_sizes, mode):
     remapped_offset_dims = []
     operand_rank = len(operand.shape)
     assert operand_rank == 1
-    available_dims = [dim for dim in range(operand_rank) if dim not in collapsed_slice_dims]
+    available_dims = [
+        dim for dim in range(operand_rank) if dim not in collapsed_slice_dims
+    ]
     assert len(offset_dims) == 1
     for idx, offset_dim in enumerate(offset_dims):
         remapped_offset_dims.append(available_dims[idx])
@@ -225,7 +248,7 @@ def _sym_gather(operand, start_indices, dimension_numbers, slice_sizes, mode):
         # NOTE MODIFIED: In = tuple(Sin[d] + Oin[d] for d in range(operand_rank))
         # Step 5: Compute In = Sin + Oin
         In = tuple(Sin[d] + Oin[d] for d in range(operand_rank))
-        In = (In[0] - offset_dim * operand.shape[0],) # the offset
+        In = (In[0] - offset_dim * operand.shape[0],)  # the offset
 
         # Step 6: Handle out-of-bounds indices
         if mode == jax.lax.GatherScatterMode.CLIP:
@@ -241,8 +264,8 @@ def _sym_gather(operand, start_indices, dimension_numbers, slice_sizes, mode):
 
     return output
 
+
 def _sym_scatter(operand, scatter_indices, updates, dimension_numbers, mode):
-    
     # Unpack dimension numbers
     update_window_dims = dimension_numbers.update_window_dims
     inserted_window_dims = dimension_numbers.inserted_window_dims
@@ -252,15 +275,23 @@ def _sym_scatter(operand, scatter_indices, updates, dimension_numbers, mode):
     output = operand.copy()
 
     # Determine update_scatter_dims: dimensions in updates not used for the window
-    update_scatter_dims = [i for i in range(updates.ndim) if i not in update_window_dims]
+    update_scatter_dims = [
+        i for i in range(updates.ndim) if i not in update_window_dims
+    ]
 
-    def build_window_dims_to_operand_dims(update_window_dims, inserted_window_dims, operand_rank):
+    def build_window_dims_to_operand_dims(
+        update_window_dims, inserted_window_dims, operand_rank
+    ):
         """
         Build mapping from update_window_dims to operand dimensions, excluding inserted_window_dims.
         """
         # Get all operand dimensions excluding inserted_window_dims
-        available_dims = [i for i in range(operand_rank) if i not in inserted_window_dims]
-        mapping = {dim: available_dims[idx] for idx, dim in enumerate(update_window_dims)}
+        available_dims = [
+            i for i in range(operand_rank) if i not in inserted_window_dims
+        ]
+        mapping = {
+            dim: available_dims[idx] for idx, dim in enumerate(update_window_dims)
+        }
         return mapping
 
     for update_index in np.ndindex(*updates.shape):
@@ -282,7 +313,9 @@ def _sym_scatter(operand, scatter_indices, updates, dimension_numbers, mode):
 
         # Step 4: Compute Win
         Win = [0] * operand.ndim
-        window_mapping = build_window_dims_to_operand_dims(update_window_dims, inserted_window_dims, operand.ndim)
+        window_mapping = build_window_dims_to_operand_dims(
+            update_window_dims, inserted_window_dims, operand.ndim
+        )
         for i in update_window_dims:
             Win[window_mapping[i]] = update_index[i]
 
@@ -306,6 +339,7 @@ def _sym_scatter(operand, scatter_indices, updates, dimension_numbers, mode):
 
     return output
 
+
 def _sym_broadcast_in_dim(a, shape, broadcast_dimensions):
     assert len(a) == 1
     a = a[0]
@@ -315,23 +349,25 @@ def _sym_broadcast_in_dim(a, shape, broadcast_dimensions):
     a_reshaped = np.reshape(a, reshaped_shape)
     return np.broadcast_to(a_reshaped, shape)
 
+
 def _sym_concatenate(arr_list, dimension=0):
     return np.concat(arr_list, axis=dimension)
 
+
 primitive_to_sympy_op = {
-    "add":  lambda inexprs, eqn: _sym_add(*inexprs),
-    "sub":  lambda inexprs, eqn: _sym_sub(*inexprs),
-    "mul":  lambda inexprs, eqn: _sym_mul(*inexprs),
-    "div":  lambda inexprs, eqn: _sym_div(*inexprs),
-    "neg":  lambda inexprs, eqn: _sym_neg(*inexprs),
-    "pow":  lambda inexprs, eqn: _sym_pow(*inexprs),
-    "integer_pow": lambda inexprs, eqn: _sym_integer_pow(inexprs[0], eqn.params['y']),
+    "add": lambda inexprs, eqn: _sym_add(*inexprs),
+    "sub": lambda inexprs, eqn: _sym_sub(*inexprs),
+    "mul": lambda inexprs, eqn: _sym_mul(*inexprs),
+    "div": lambda inexprs, eqn: _sym_div(*inexprs),
+    "neg": lambda inexprs, eqn: _sym_neg(*inexprs),
+    "pow": lambda inexprs, eqn: _sym_pow(*inexprs),
+    "integer_pow": lambda inexprs, eqn: _sym_integer_pow(inexprs[0], eqn.params["y"]),
     "sign": lambda inexprs, eqn: _sym_sign(*inexprs),
-    "exp":  lambda inexprs, eqn: _sym_exp(*inexprs),
-    "log":  lambda inexprs, eqn: _sym_log(*inexprs),
-    "sin":  lambda inexprs, eqn: _sym_sin(*inexprs),
-    "cos":  lambda inexprs, eqn: _sym_cos(*inexprs),
-    "tan":  lambda inexprs, eqn: _sym_tan(*inexprs),
+    "exp": lambda inexprs, eqn: _sym_exp(*inexprs),
+    "log": lambda inexprs, eqn: _sym_log(*inexprs),
+    "sin": lambda inexprs, eqn: _sym_sin(*inexprs),
+    "cos": lambda inexprs, eqn: _sym_cos(*inexprs),
+    "tan": lambda inexprs, eqn: _sym_tan(*inexprs),
     "asin": lambda inexprs, eqn: _sym_asin(*inexprs),
     "acos": lambda inexprs, eqn: _sym_acos(*inexprs),
     "atan": lambda inexprs, eqn: _sym_atan(*inexprs),
@@ -339,41 +375,43 @@ primitive_to_sympy_op = {
     "cosh": lambda inexprs, eqn: _sym_cosh(*inexprs),
     "tanh": lambda inexprs, eqn: _sym_tanh(*inexprs),
     "sqrt": lambda inexprs, eqn: _sym_sqrt(*inexprs),
-    "eq":  lambda inexprs, eqn: _sym_eq(*inexprs),
-    "ne":  lambda inexprs, eqn: _sym_ne(*inexprs),
-    "lt":  lambda inexprs, eqn: _sym_lt(*inexprs),
-    "le":  lambda inexprs, eqn: _sym_le(*inexprs),
-    "gt":  lambda inexprs, eqn: _sym_gt(*inexprs),
-    "ge":  lambda inexprs, eqn: _sym_ge(*inexprs),
+    "eq": lambda inexprs, eqn: _sym_eq(*inexprs),
+    "ne": lambda inexprs, eqn: _sym_ne(*inexprs),
+    "lt": lambda inexprs, eqn: _sym_lt(*inexprs),
+    "le": lambda inexprs, eqn: _sym_le(*inexprs),
+    "gt": lambda inexprs, eqn: _sym_gt(*inexprs),
+    "ge": lambda inexprs, eqn: _sym_ge(*inexprs),
     "not": lambda inexprs, eqn: _sym_not(*inexprs),
     "and": lambda inexprs, eqn: _sym_and(*inexprs),
-    "or":  lambda inexprs, eqn: _sym_or(*inexprs),
+    "or": lambda inexprs, eqn: _sym_or(*inexprs),
     "max": lambda inexprs, eqn: _sym_max(*inexprs),
     "min": lambda inexprs, eqn: _sym_min(*inexprs),
     "convert_element_type": lambda inexprs, eqn: _sym_convert_element_type(inexprs),
     "broadcast_in_dim": lambda inexprs, eqn: _sym_broadcast_in_dim(
         inexprs,
-        shape = eqn.params["shape"],
-        broadcast_dimensions = eqn.params["broadcast_dimensions"],
+        shape=eqn.params["shape"],
+        broadcast_dimensions=eqn.params["broadcast_dimensions"],
     ),
-    "concatenate": lambda inexprs, eqn: _sym_concatenate(inexprs, eqn.params["dimension"]),
-    "slice":       lambda inexprs, eqn: _sym_slice(
+    "concatenate": lambda inexprs, eqn: _sym_concatenate(
+        inexprs, eqn.params["dimension"]
+    ),
+    "slice": lambda inexprs, eqn: _sym_slice(
         *inexprs,
         eqn.params["start_indices"],
         eqn.params["limit_indices"],
         eqn.params.get("strides", None),
     ),
-    "squeeze":     lambda inexprs, eqn: _sym_squeeze(*inexprs, eqn.params["dimensions"]),
-    "scatter":     lambda inexprs, eqn: _sym_scatter(
-        *inexprs, 
-        dimension_numbers = eqn.params["dimension_numbers"], 
-        mode = eqn.params["mode"],
-    ),
-    "gather":      lambda inexprs, eqn: _sym_gather(
+    "squeeze": lambda inexprs, eqn: _sym_squeeze(*inexprs, eqn.params["dimensions"]),
+    "scatter": lambda inexprs, eqn: _sym_scatter(
         *inexprs,
-        dimension_numbers = eqn.params["dimension_numbers"],
-        slice_sizes = eqn.params["slice_sizes"],
-        mode = eqn.params["mode"],
+        dimension_numbers=eqn.params["dimension_numbers"],
+        mode=eqn.params["mode"],
+    ),
+    "gather": lambda inexprs, eqn: _sym_gather(
+        *inexprs,
+        dimension_numbers=eqn.params["dimension_numbers"],
+        slice_sizes=eqn.params["slice_sizes"],
+        mode=eqn.params["mode"],
     ),
     "add_any": lambda inexprs, eqn: _sym_add_any(inexprs),
     "pad": lambda inexprs, eqn: _sym_pad(inexprs, eqn),
@@ -381,11 +419,11 @@ primitive_to_sympy_op = {
     "reduce_sum": lambda inexprs, eqn: _sym_reduce_sum(inexprs, eqn),
     "iota": lambda inexprs, eqn: _sym_iota(eqn),
     "split": lambda inexprs, eqn: _sym_split(inexprs, eqn),
-    #"convert_element_type": lambda inexprs, eqn: _sym_convert_element_type(inexprs[0]),
+    # "convert_element_type": lambda inexprs, eqn: _sym_convert_element_type(inexprs[0]),
     "dot_general": lambda inexprs, eqn: _sym_dot_general(inexprs[0], inexprs[1], eqn),
     "transpose": lambda inexprs, eqn: _sym_transpose(inexprs[0], eqn),
     "reshape": lambda inexprs, eqn: _sym_reshape(
-        *inexprs,                # the expression being reshaped
+        *inexprs,  # the expression being reshaped
         eqn.params["new_sizes"],
         eqn.params["dimensions"],
     ),

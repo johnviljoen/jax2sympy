@@ -11,22 +11,22 @@ import numpy as np
 
 def add_output_info(problem_fn):
     """Decorator to add information to the problem output."""
+
     def wrapper(width, height, target_vf, *args, **kwargs):
         out = problem_fn(width, height, target_vf, *args, **kwargs)
         normals = out["normals"]
         forces = out["forces"]
-        fixdofs, freedofs = _get_fixed_and_free_dofs(
-            normals, forces, width, height)
+        fixdofs, freedofs = _get_fixed_and_free_dofs(normals, forces, width, height)
         out["fixdofs"] = fixdofs
         out["freedofs"] = freedofs
 
         # Add x and y lists for the problem
-        out["_k_x_list"], out["_k_y_list"] = get_k_x_and_y_lists(
-            width, height)
-        out["_n_valid_inds"] = int(get_num_valid_inds(out["_k_x_list"],
-                                                      out["_k_y_list"],
-                                                      freedofs))
+        out["_k_x_list"], out["_k_y_list"] = get_k_x_and_y_lists(width, height)
+        out["_n_valid_inds"] = int(
+            get_num_valid_inds(out["_k_x_list"], out["_k_y_list"], freedofs)
+        )
         return out
+
     return wrapper
 
 
@@ -69,6 +69,7 @@ def _get_fixed_and_free_dofs(normals, forces, width, height):
     alldofs = np.arange(2 * (width + 1) * (height + 1))
     freedofs = np.sort(list(set(alldofs) - set(fixdofs)))
     return fixdofs, freedofs
+
 
 # == Problem Definitions ==
 
@@ -196,13 +197,11 @@ class SparseMatrixLinearOperator(lx.AbstractLinearOperator, strict=True):
 
     def in_structure(self):
         _, in_size = self.bcoo_matrix.shape
-        return jax.ShapeDtypeStruct(shape=(in_size,),
-                                    dtype=self.bcoo_matrix.dtype)
+        return jax.ShapeDtypeStruct(shape=(in_size,), dtype=self.bcoo_matrix.dtype)
 
     def out_structure(self):
         out_size, _ = self.bcoo_matrix.shape
-        return jax.ShapeDtypeStruct(shape=(out_size,),
-                                    dtype=self.bcoo_matrix.dtype)
+        return jax.ShapeDtypeStruct(shape=(out_size,), dtype=self.bcoo_matrix.dtype)
 
 
 @lx.is_symmetric.register(SparseMatrixLinearOperator)
@@ -242,14 +241,16 @@ class CVXOPTSolver(lx.AbstractLinearSolver):
 
         # call the solver
         result_shape_dtypes = jax.ShapeDtypeStruct(
-            jnp.broadcast_shapes(rhs.shape), rhs.dtype)
+            jnp.broadcast_shapes(rhs.shape), rhs.dtype
+        )
         sol = jax.pure_callback(
             host_solve,
             result_shape_dtypes,
             data,
             indices,
             rhs,
-            vmap_method="sequential")
+            vmap_method="sequential",
+        )
         return sol, lx.RESULTS.successful, {}
 
     def allow_dependent_columns(self, operator):
@@ -274,8 +275,7 @@ def get_k_entries(stiffness, ke):
 
 def inverse_permutation_jax(indices):
     inverse_perm = jnp.zeros(len(indices), dtype=int)
-    inverse_perm = inverse_perm.at[indices].set(
-        jnp.arange(len(indices), dtype=int))
+    inverse_perm = inverse_perm.at[indices].set(jnp.arange(len(indices), dtype=int))
     return inverse_perm
 
 
@@ -313,8 +313,9 @@ def get_num_valid_inds(x_list, y_list, freedofs):
     return n_valid_inds
 
 
-def setup_solver_with_lineax(cfg: DictConfig, solver=None,
-                             symmetrsize_before_solve=True):
+def setup_solver_with_lineax(
+    cfg: DictConfig, solver=None, symmetrsize_before_solve=True
+):
     """Returns a function that computes the compliance.
 
     penal_for_stress_calc is the penalty for the stress calculation.
@@ -327,7 +328,14 @@ def setup_solver_with_lineax(cfg: DictConfig, solver=None,
     """
     # Get details from config
     young_mod, young_min, poisson, Nx, Ny, Lx, Ly = (
-        cfg.young, cfg.young_min, cfg.poisson, cfg.Nx, cfg.Ny, cfg.Lx, cfg.Ly)
+        cfg.young,
+        cfg.young_min,
+        cfg.poisson,
+        cfg.Nx,
+        cfg.Ny,
+        cfg.Lx,
+        cfg.Ly,
+    )
     # prereqs for compliance calculation
     ke = get_elem_stiffness_matrix(young_mod, poisson, Lx, Ly, Nx, Ny)
     if solver is None:
@@ -350,21 +358,23 @@ def setup_solver_with_lineax(cfg: DictConfig, solver=None,
         stiffness = young_modulus(x_filtered, young_mod, young_min, p=penalty)
         k_entries = get_k_entries(stiffness, ke)
         index_map, keep, indices = filter_dofs(
-            freedofs, fixdofs, y_list, x_list,
-            n_valid_inds)
-        filtered_k_entries = safe_boolean_indexing(k_entries, keep,
-                                                   n_valid_items=n_valid_inds)
+            freedofs, fixdofs, y_list, x_list, n_valid_inds
+        )
+        filtered_k_entries = safe_boolean_indexing(
+            k_entries, keep, n_valid_items=n_valid_inds
+        )
         # k_entries[keep]
         filtered_force = forces[freedofs]
         bcoo_matrix = BCOO(
-            (filtered_k_entries, indices.T), shape=(
-                filtered_force.size, filtered_force.size))
-        bcoo_matrix = (bcoo_matrix + bcoo_matrix.T)/2.0
+            (filtered_k_entries, indices.T),
+            shape=(filtered_force.size, filtered_force.size),
+        )
+        bcoo_matrix = (bcoo_matrix + bcoo_matrix.T) / 2.0
         operator = SparseMatrixLinearOperator(bcoo_matrix)
         u_filtered = lx.linear_solve(
-            operator, filtered_force, solver=solver, options=None).value
-        u_values = jnp.concatenate(
-            [u_filtered.ravel(), jnp.zeros(len(fixdofs))])
+            operator, filtered_force, solver=solver, options=None
+        ).value
+        u_values = jnp.concatenate([u_filtered.ravel(), jnp.zeros(len(fixdofs))])
         u_values = u_values[index_map]
         # Calculate compliance and stress
         ce_unscaled = compliance(Ny, Nx, u_values, ke)
@@ -378,16 +388,19 @@ def setup_solver_with_lineax(cfg: DictConfig, solver=None,
 if __name__ == "__main__":
     jax.config.update("jax_enable_x64", True)
     import equinox as eqx
+
     # Test the compliance function
-    cfg = DictConfig({
-        "young": 1.0,
-        "young_min": 1e-9,
-        "poisson": 0.3,
-        "Nx": 10,
-        "Ny": 10,
-        "Lx": 10.0,
-        "Ly": 10.0
-    })
+    cfg = DictConfig(
+        {
+            "young": 1.0,
+            "young_min": 1e-9,
+            "poisson": 0.3,
+            "Nx": 10,
+            "Ny": 10,
+            "Lx": 10.0,
+            "Ly": 10.0,
+        }
+    )
     Nx, Ny, vf = cfg.Nx, cfg.Ny, 1.0
     problem = mbb_beam(Nx, Ny, vf)
     x = np.ones((Ny, Nx)) * vf
@@ -399,7 +412,9 @@ if __name__ == "__main__":
     val2 = new_solver(x, problem, 3.0)
     print("Compliance:", val2)
 
-    def fn(x): return new_solver(x, problem, 3.0)
+    def fn(x):
+        return new_solver(x, problem, 3.0)
+
     # Test gradient
     grads = jax.jacrev(fn)(x)
     print("Gradient:", jnp.linalg.norm(grads))
@@ -407,10 +422,9 @@ if __name__ == "__main__":
     # Test with sparsity
     import jax2sympy as j2s
     from jax2sympy.sparsify import get_sparsity_pattern, sparse_jacobian
-    spar_pattern = get_sparsity_pattern(
-        fn, x, type='jacobian')
-    sparse_grads = sparse_jacobian(
-        fn, spar_pattern, (x.shape, ))
+
+    spar_pattern = get_sparsity_pattern(fn, x, type="jacobian")
+    sparse_grads = sparse_jacobian(fn, spar_pattern, (x.shape,))
 
     pass
     # from jax.test_util import check_grads
