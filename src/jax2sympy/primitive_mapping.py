@@ -381,7 +381,7 @@ primitive_to_sympy_op = {
     "reduce_sum": lambda inexprs, eqn: _sym_reduce_sum(inexprs, eqn),
     "iota": lambda inexprs, eqn: _sym_iota(eqn),
     "split": lambda inexprs, eqn: _sym_split(inexprs, eqn),
-    "convert_element_type": lambda inexprs, eqn: _sym_convert_element_type(inexprs[0]),
+    #"convert_element_type": lambda inexprs, eqn: _sym_convert_element_type(inexprs[0]),
     "dot_general": lambda inexprs, eqn: _sym_dot_general(inexprs[0], inexprs[1], eqn),
     "transpose": lambda inexprs, eqn: _sym_transpose(inexprs[0], eqn),
     "reshape": lambda inexprs, eqn: _sym_reshape(
