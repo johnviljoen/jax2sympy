@@ -1,10 +1,10 @@
-from jax.extend.core import Literal
+import numpy as np
+import sympy as sy
 
 # jax 0.8.0 introduced TypnedNdArrays
-from jax._src.literals import TypedNdArray, TypedInt, TypedFloat, TypedComplex
-import sympy as sy
+from jax._src.literals import TypedNdArray
+from jax.extend.core import Literal
 from jax2sympy.primitive_mapping import primitive_to_sympy_op
-import numpy as np
 
 
 def get_sym_invar(invars, var2sym):
@@ -63,7 +63,8 @@ def jaxpr_to_sympy_expressions(jaxpr, var2sym=dict(), x_cnt=0, c_cnt=0):
     # def sub_consts(var2sym, consts):
     #     const_idx = 0
     #     for key, arr in list(var2sym.items()):
-    #         # Ensure 'arr' is an array of object (sympy-like) and check if *all* entries start with 'c'
+    #         # Ensure 'arr' is an array of object (sympy-like) and check if *all* 
+    #           entries start with 'c'
     #         if (isinstance(arr, np.ndarray) and arr.dtype == object
     #             and all(str(sym).startswith('c') for sym in arr.ravel())):
     #             var2sym[key] = consts[const_idx]
@@ -108,7 +109,6 @@ def jaxpr_to_sympy_expressions(jaxpr, var2sym=dict(), x_cnt=0, c_cnt=0):
 
 if __name__ == "__main__":
     import jax
-    import jax.numpy as jnp
     from jax2sympy.problems import mpc
 
     f, h, g, x0, gt, aux = mpc.quadcopter_nav(N=3)  # N=100

@@ -1,10 +1,10 @@
-import numpy as np
 import jax
 import jax.numpy as jnp
-from jax.experimental.sparse import BCOO
+import numpy as np
 import sympy as sy
-from tqdm import tqdm
+from jax.experimental.sparse import BCOO
 from jax2sympy.translate import jaxpr_to_sympy_expressions
+
 
 #######################################
 # ---------- SymPy sparsity --------- #
@@ -36,9 +36,9 @@ def _sym_sparse_jacobian(inp_shape, out_flat, out_shape, get_var_idx):
 
 
 def get_sparsity_pattern(f, x, type="hessian"):  # "jacobian" or "hessian"
-    """
-    A helper function doing setup and low level calls of other functions in the file
-    to get the final desired sparsity pattern of a jacobian or hessian of a given function
+    """ A helper function doing setup and low level calls of other functions in the file
+    to get the final desired sparsity pattern of a jacobian or hessian of a given 
+    function.
     """
     jaxpr = jax.make_jaxpr(f)(x)
     out_syms, var2sym, _, _ = jaxpr_to_sympy_expressions(jaxpr, var2sym=dict())
@@ -75,7 +75,8 @@ def get_sparsity_pattern(f, x, type="hessian"):  # "jacobian" or "hessian"
         return np.array(sym_jac_coo)
 
     if type == "hessian":
-        # calculate the sparsity pattern of the hessian by first creating the jacobian in sympy
+        # calculate the sparsity pattern of the hessian by first creating the jacobian 
+        # in sympy
         num_inputs = len(jaxpr.jaxpr.invars)
         num_constants = len(jaxpr.jaxpr.constvars)
         iterator = iter(var2sym)
@@ -222,9 +223,8 @@ def sparse_hessian(f, hes_coo, out_shape):
     if ncols > 2:
 
         def partial_out_ij(x, out_idx, i, j, *args):
-            """
-            Compute d^2 f_{out_idx}(x) / (dx_i dx_j).
-            That is: first derivative w.r.t. x_i, then derivative of that result w.r.t. x_j.
+            """ Compute d^2 f_{out_idx}(x) / (dx_i dx_j). That is: first derivative 
+            w.r.t. x_i, then derivative of that result w.r.t. x_j.
             """
 
             # 1) Define a function g_i(u) = df_{out_idx}(u)/dx_i
@@ -261,8 +261,8 @@ def sparse_hessian(f, hes_coo, out_shape):
 
         def partial_ij(x, i, j, *args):
             """
-            Compute d^2 f(x) / (dx_i dx_j).
-            That is: first derivative w.r.t. x_i, then derivative of that result w.r.t. x_j.
+            Compute d^2 f(x) / (dx_i dx_j). That is: first derivative w.r.t. x_i, then 
+            derivative of that result w.r.t. x_j.
             """
 
             # 1) g_i(u) = derivative of f(u) w.r.t. x_i
@@ -356,9 +356,10 @@ def test_coo(f, coos, x):
 
 
 if __name__ == "__main__":
-    from jax2sympy.problems import mpc
-    import matplotlib.pyplot as plt
     from datetime import datetime
+
+    import matplotlib.pyplot as plt
+    from jax2sympy.problems import mpc
 
     f, h, g, x, gt, aux = mpc.quadcopter_nav(
         N=3
@@ -417,7 +418,9 @@ if __name__ == "__main__":
     # test_dense_hess(jax.hessian(f), hes_f_sp, hes_coo, x)
 
     # hes_h_sp = sparse_hessian(h, hes_h_coo)
-    # # hes_h_sp = sparse_jacobian_sparse_matrix_input(jac_h_sp, hes_h_coo)# , x.shape, [*h(x).shape, *x.shape, *x.shape])
+    # # hes_h_sp = sparse_jacobian_sparse_matrix_input(
+    #     jac_h_sp, hes_h_coo)# , x.shape, [*h(x).shape, *x.shape, *x.shape]
+    # )
     # test_dense_hess(jax.hessian(h), hes_h_sp, hes_h_coo, x)
 
     pass

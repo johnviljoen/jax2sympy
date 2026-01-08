@@ -4,8 +4,8 @@ sparse matrices
 """
 
 import jax
-import jax.numpy as jnp
 import jax.experimental.sparse as jsp
+import jax.numpy as jnp
 
 
 def hstack(bcoo_list):

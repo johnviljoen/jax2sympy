@@ -1,7 +1,7 @@
 import jax
-import sympy as sy
 import numpy as np
-from jax.extend.core import Literal
+import sympy as sy
+
 
 # elementwise
 _sym_add = lambda a, b: a + b
@@ -118,7 +118,8 @@ _sym_convert_element_type = lambda a: a
 
 def _sym_reshape(a, new_sizes, dimensions):
     # if 0 in dimensions:
-    #     print("WARNING: using _sym_reshape with 0 dimensions is not validated and is happening")
+    #     print("WARNING: using _sym_reshape with 0 dimensions is not validated and is 
+    # happening")
     if dimensions is None or 0 in dimensions:
         a = a.reshape(*new_sizes)
     else:
@@ -282,8 +283,8 @@ def _sym_scatter(operand, scatter_indices, updates, dimension_numbers, mode):
     def build_window_dims_to_operand_dims(
         update_window_dims, inserted_window_dims, operand_rank
     ):
-        """
-        Build mapping from update_window_dims to operand dimensions, excluding inserted_window_dims.
+        """Build mapping from update_window_dims to operand dimensions, excluding 
+        inserted_window_dims.
         """
         # Get all operand dimensions excluding inserted_window_dims
         available_dims = [
@@ -419,7 +420,8 @@ primitive_to_sympy_op = {
     "reduce_sum": lambda inexprs, eqn: _sym_reduce_sum(inexprs, eqn),
     "iota": lambda inexprs, eqn: _sym_iota(eqn),
     "split": lambda inexprs, eqn: _sym_split(inexprs, eqn),
-    # "convert_element_type": lambda inexprs, eqn: _sym_convert_element_type(inexprs[0]),
+    # "convert_element_type": 
+    #   lambda inexprs, eqn: _sym_convert_element_type(inexprs[0]),
     "dot_general": lambda inexprs, eqn: _sym_dot_general(inexprs[0], inexprs[1], eqn),
     "transpose": lambda inexprs, eqn: _sym_transpose(inexprs[0], eqn),
     "reshape": lambda inexprs, eqn: _sym_reshape(

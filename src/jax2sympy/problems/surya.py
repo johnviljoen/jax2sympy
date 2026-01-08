@@ -1,12 +1,12 @@
 import cvxopt
 import cvxopt.cholmod
+import equinox as eqx
 import jax
 import jax.numpy as jnp
-from omegaconf import DictConfig
 import lineax as lx
-from jax.experimental.sparse import BCOO
-import equinox as eqx
 import numpy as np
+from jax.experimental.sparse import BCOO
+from omegaconf import DictConfig
 
 
 def add_output_info(problem_fn):
@@ -420,7 +420,6 @@ if __name__ == "__main__":
     print("Gradient:", jnp.linalg.norm(grads))
 
     # Test with sparsity
-    import jax2sympy as j2s
     from jax2sympy.sparsify import get_sparsity_pattern, sparse_jacobian
 
     spar_pattern = get_sparsity_pattern(fn, x, type="jacobian")
