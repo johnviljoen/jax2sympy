@@ -4,6 +4,9 @@ import sympy as sy
 
 
 # elementwise
+_sym_square = lambda a: a**2
+_sym_atan2 = lambda y, x: np.vectorize(lambda y, x: sy.atan2(y, x))(y, x)
+_sym_copy = lambda a: a
 _sym_add = lambda a, b: a + b
 _sym_sub = lambda a, b: a - b
 _sym_mul = lambda a, b: a * b
@@ -23,6 +26,7 @@ _sym_sinh = lambda a: np.vectorize(sy.sinh)(a)
 _sym_cosh = lambda a: np.vectorize(sy.cosh)(a)
 _sym_tanh = lambda a: np.vectorize(sy.tanh)(a)
 _sym_sqrt = lambda a: np.vectorize(sy.sqrt)(a)
+_sym_abs = lambda a: np.vectorize(sy.Abs)(a)
 _sym_sign = lambda a: np.vectorize(sy.sign)(a)
 _sym_eq = lambda a, b: np.vectorize(lambda a, b: int(a == b))(a, b)
 _sym_ne = lambda a, b: np.vectorize(sy.Ne)(a, b)
@@ -41,6 +45,11 @@ _sym_min = lambda a, b: np.vectorize(sy.Min)(a, b)
 def _sym_reduce_sum(a, eqn):
     assert len(a) == 1
     return np.sum(a[0], axis=eqn.params["axes"])
+
+
+def _sym_reduce_prod(a, eqn):
+    assert len(a) == 1
+    return np.prod(a[0], axis=eqn.params["axes"])
 
 
 def _sym_transpose(a, eqn):
@@ -361,6 +370,9 @@ primitive_to_sympy_op = {
     "mul": lambda inexprs, eqn: _sym_mul(*inexprs),
     "div": lambda inexprs, eqn: _sym_div(*inexprs),
     "neg": lambda inexprs, eqn: _sym_neg(*inexprs),
+    "square": lambda inexprs, eqn: _sym_square(*inexprs),
+    "atan2": lambda inexprs, eqn: _sym_atan2(*inexprs),
+    "copy": lambda inexprs, eqn: _sym_copy(*inexprs),
     "pow": lambda inexprs, eqn: _sym_pow(*inexprs),
     "integer_pow": lambda inexprs, eqn: _sym_integer_pow(inexprs[0], eqn.params["y"]),
     "sign": lambda inexprs, eqn: _sym_sign(*inexprs),
@@ -376,6 +388,7 @@ primitive_to_sympy_op = {
     "cosh": lambda inexprs, eqn: _sym_cosh(*inexprs),
     "tanh": lambda inexprs, eqn: _sym_tanh(*inexprs),
     "sqrt": lambda inexprs, eqn: _sym_sqrt(*inexprs),
+    "abs": lambda inexprs, eqn: _sym_abs(*inexprs),
     "eq": lambda inexprs, eqn: _sym_eq(*inexprs),
     "ne": lambda inexprs, eqn: _sym_ne(*inexprs),
     "lt": lambda inexprs, eqn: _sym_lt(*inexprs),
@@ -418,6 +431,7 @@ primitive_to_sympy_op = {
     "pad": lambda inexprs, eqn: _sym_pad(inexprs, eqn),
     "select_n": lambda inexprs, eqn: _sym_select_n(inexprs),
     "reduce_sum": lambda inexprs, eqn: _sym_reduce_sum(inexprs, eqn),
+    "reduce_prod": lambda inexprs, eqn: _sym_reduce_prod(inexprs, eqn),
     "iota": lambda inexprs, eqn: _sym_iota(eqn),
     "split": lambda inexprs, eqn: _sym_split(inexprs, eqn),
     # "convert_element_type":
