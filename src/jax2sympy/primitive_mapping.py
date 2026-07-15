@@ -19,12 +19,15 @@ _sym_tan = lambda a:  np.vectorize(sy.tan)(a)
 _sym_asin = lambda a: np.vectorize(sy.asin)(a)
 _sym_acos = lambda a: np.vectorize(sy.acos)(a)
 _sym_atan = lambda a: np.vectorize(sy.atan)(a)
+_sym_atan2 = lambda a, b: np.vectorize(sy.atan2)(a, b)  # UNTESTED (added 2026-07-14, no numeric regression coverage yet)
 _sym_sinh = lambda a: np.vectorize(sy.sinh)(a)
 _sym_cosh = lambda a: np.vectorize(sy.cosh)(a)
 _sym_tanh = lambda a: np.vectorize(sy.tanh)(a)
 _sym_sqrt = lambda a: np.vectorize(sy.sqrt)(a)
 _sym_sign = lambda a: np.vectorize(sy.sign)(a)
-_sym_eq = lambda a, b:  np.vectorize(lambda a, b: int(a == b))(a, b)
+_sym_square = lambda a: a ** 2
+_sym_abs = lambda a:  np.vectorize(sy.Abs)(a)
+_sym_eq = lambda a, b:  np.vectorize(sy.Eq)(a, b)
 _sym_ne = lambda a, b:  np.vectorize(sy.Ne)(a, b)
 _sym_lt = lambda a, b:  np.vectorize(sy.StrictLessThan)(a, b)
 _sym_le = lambda a, b:  np.vectorize(sy.LessThan)(a, b)
@@ -35,14 +38,26 @@ _sym_or = lambda a, b:  np.vectorize(sy.Or)(a, b)
 _sym_not = lambda a:    np.vectorize(sy.Not)(a)
 _sym_max = lambda a, b: np.vectorize(sy.Max)(a, b)
 _sym_min = lambda a, b: np.vectorize(sy.Min)(a, b)
+_sym_logaddexp = lambda a, b: np.vectorize(lambda x, y: sy.log(sy.exp(x) + sy.exp(y)))(a, b)
 
 # array
 def _sym_reduce_sum(a, eqn):
     assert len(a) == 1
     return np.sum(a[0], axis=eqn.params["axes"])
 
+def _sym_reduce_or(a, eqn):
+    # print("WARNING: _sym_reduce_or not validated and is in use")
+    assert len(a) == 1
+    arr = a[0]
+    axes = eqn.params["axes"]
+    if axes == ():
+        # Reduce over all axes - return single Or of all elements
+        return sy.Or(*arr.flat)
+    else:
+        return np.apply_along_axis(lambda x: sy.Or(*x), axes[0], arr)
+
 def _sym_transpose(a, eqn):
-    print("WARNING: _sym_transpose not validated and is in use")
+    # print("WARNING: _sym_transpose not validated and is in use")
     perm = (
         eqn.params.get("permutation")            # canonical in JAX
         or eqn.params.get("axes")                # NumPy nomenclature, just in case
@@ -72,7 +87,7 @@ def _sym_select_n(inexprs):
     if pred.dtype != object and pred.dtype == bool:
         return np.where(pred, true_val, false_val)
     
-    print("WARNING: _sym_select_n symbolic path not validated and in use")
+    # print("WARNING: _sym_select_n symbolic path not validated and in use")
 
     # General symbolic path: element-wise Piecewise
     piecewise_fn = np.vectorize(
@@ -149,6 +164,19 @@ def _sym_slice(a, start_indices, limit_indices, strides):
         for start, limit in zip(start_indices, limit_indices):
             axis_slice.append([start, limit, 1])
     return a[tuple([slice(s[0], s[1], s[2]) for s in axis_slice])]
+
+def _sym_dynamic_slice(inexprs, eqn):
+    # inexprs[0] is the array, inexprs[1:] are the start indices
+    a = inexprs[0]
+    start_indices = inexprs[1:]
+    slice_sizes = eqn.params["slice_sizes"]
+    # Build slices: start[i] : start[i] + size[i]
+    slices = tuple(
+        slice(int(start.flat[0]) if hasattr(start, 'flat') else int(start),
+              int(start.flat[0]) + size if hasattr(start, 'flat') else int(start) + size)
+        for start, size in zip(start_indices, slice_sizes)
+    )
+    return a[slices]
 
 def _sym_dot_general(a, b, eqn):
 
@@ -241,7 +269,10 @@ def _sym_gather(operand, start_indices, dimension_numbers, slice_sizes, mode):
 
     return output
 
-def _sym_scatter(operand, scatter_indices, updates, dimension_numbers, mode):
+def _sym_scatter(operand, scatter_indices, updates, dimension_numbers, mode,
+                 combine=None):
+    # combine=None replaces (lax.scatter); scatter-add passes an additive
+    # combine so colliding updates accumulate.
     
     # Unpack dimension numbers
     update_window_dims = dimension_numbers.update_window_dims
@@ -302,7 +333,10 @@ def _sym_scatter(operand, scatter_indices, updates, dimension_numbers, mode):
                 raise IndexError(f"Out-of-bounds index: {I}")
 
         # Step 7: Apply the update
-        output[I] = updates[update_index]
+        if combine is None:
+            output[I] = updates[update_index]
+        else:
+            output[I] = combine(output[I], updates[update_index])
 
     return output
 
@@ -318,6 +352,23 @@ def _sym_broadcast_in_dim(a, shape, broadcast_dimensions):
 def _sym_concatenate(arr_list, dimension=0):
     return np.concat(arr_list, axis=dimension)
 
+def _sym_stack(arr_list, axis=0):
+    # jax >= 0.9 emits a first-class 'stack' primitive (jnp.stack no longer
+    # lowers to concatenate+reshape as it did on <= 0.8). Validated by
+    # tests/test_jax_upgrade_surface.py against dense jax autodiff.
+    return np.stack(arr_list, axis=axis)
+
+def _sym_cumsum(a, eqn):
+    # UNTESTED (added 2026-07-14, no numeric regression coverage yet)
+    assert len(a) == 1
+    arr = a[0]
+    axis = eqn.params["axis"]
+    reverse = eqn.params.get("reverse", False)
+    if reverse:
+        arr = np.flip(arr, axis=axis)
+    out = np.cumsum(arr, axis=axis)
+    return np.flip(out, axis=axis) if reverse else out
+
 primitive_to_sympy_op = {
     "add":  lambda inexprs, eqn: _sym_add(*inexprs),
     "sub":  lambda inexprs, eqn: _sym_sub(*inexprs),
@@ -327,6 +378,8 @@ primitive_to_sympy_op = {
     "pow":  lambda inexprs, eqn: _sym_pow(*inexprs),
     "integer_pow": lambda inexprs, eqn: _sym_integer_pow(inexprs[0], eqn.params['y']),
     "sign": lambda inexprs, eqn: _sym_sign(*inexprs),
+    "square": lambda inexprs, eqn: _sym_square(*inexprs),
+    "abs":  lambda inexprs, eqn: _sym_abs(*inexprs),
     "exp":  lambda inexprs, eqn: _sym_exp(*inexprs),
     "log":  lambda inexprs, eqn: _sym_log(*inexprs),
     "sin":  lambda inexprs, eqn: _sym_sin(*inexprs),
@@ -350,6 +403,7 @@ primitive_to_sympy_op = {
     "or":  lambda inexprs, eqn: _sym_or(*inexprs),
     "max": lambda inexprs, eqn: _sym_max(*inexprs),
     "min": lambda inexprs, eqn: _sym_min(*inexprs),
+    "logaddexp": lambda inexprs, eqn: _sym_logaddexp(*inexprs),
     "convert_element_type": lambda inexprs, eqn: _sym_convert_element_type(inexprs),
     "broadcast_in_dim": lambda inexprs, eqn: _sym_broadcast_in_dim(
         inexprs,
@@ -357,6 +411,8 @@ primitive_to_sympy_op = {
         broadcast_dimensions = eqn.params["broadcast_dimensions"],
     ),
     "concatenate": lambda inexprs, eqn: _sym_concatenate(inexprs, eqn.params["dimension"]),
+    "stack": lambda inexprs, eqn: _sym_stack(inexprs, eqn.params["axis"]),
+    "dynamic_slice": lambda inexprs, eqn: _sym_dynamic_slice(inexprs, eqn),
     "slice":       lambda inexprs, eqn: _sym_slice(
         *inexprs,
         eqn.params["start_indices"],
@@ -365,9 +421,16 @@ primitive_to_sympy_op = {
     ),
     "squeeze":     lambda inexprs, eqn: _sym_squeeze(*inexprs, eqn.params["dimensions"]),
     "scatter":     lambda inexprs, eqn: _sym_scatter(
-        *inexprs, 
-        dimension_numbers = eqn.params["dimension_numbers"], 
+        *inexprs,
+        dimension_numbers = eqn.params["dimension_numbers"],
         mode = eqn.params["mode"],
+    ),
+    # UNTESTED (added 2026-07-14, no numeric regression coverage yet)
+    "scatter-add": lambda inexprs, eqn: _sym_scatter(
+        *inexprs,
+        dimension_numbers = eqn.params["dimension_numbers"],
+        mode = eqn.params["mode"],
+        combine = lambda old, new: old + new,
     ),
     "gather":      lambda inexprs, eqn: _sym_gather(
         *inexprs,
@@ -379,6 +442,12 @@ primitive_to_sympy_op = {
     "pad": lambda inexprs, eqn: _sym_pad(inexprs, eqn),
     "select_n": lambda inexprs, eqn: _sym_select_n(inexprs),
     "reduce_sum": lambda inexprs, eqn: _sym_reduce_sum(inexprs, eqn),
+    "reduce_or":  lambda inexprs, eqn: _sym_reduce_or(inexprs, eqn),
+    # UNTESTED (added 2026-07-14, no numeric regression coverage yet)
+    "atan2": lambda inexprs, eqn: _sym_atan2(*inexprs),
+    # UNTESTED (added 2026-07-14, no numeric regression coverage yet)
+    "cumsum": lambda inexprs, eqn: _sym_cumsum(inexprs, eqn),
+    "debug_print": lambda inexprs, eqn: [],  # no-op, side effect only
     "iota": lambda inexprs, eqn: _sym_iota(eqn),
     "split": lambda inexprs, eqn: _sym_split(inexprs, eqn),
     "convert_element_type": lambda inexprs, eqn: _sym_convert_element_type(inexprs[0]),

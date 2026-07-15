@@ -41,6 +41,10 @@ def get_sparsity_pattern(f, x, type='hessian'): # "jacobian" or "hessian"
     jaxpr = jax.make_jaxpr(f)(x)
     out_syms, var2sym, _, _ = jaxpr_to_sympy_expressions(jaxpr, var2sym=dict())
 
+    # Handle empty output (function returns None or empty array)
+    if len(out_syms) == 0 or (len(out_syms) == 1 and out_syms[0].size == 0):
+        return np.zeros((0, 2), dtype=np.int64)
+
     if type == "jacobian":
         # calculate the sparsity pattern without actually calculating the jacobian
         out_syms = out_syms[0]
