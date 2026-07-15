@@ -5,23 +5,22 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jax2sympy"
 version = "0.0.1"
-description = ""
+description = "Translate jaxpr graphs into elementwise SymPy expressions for symbolic analysis."
 authors = [
     { name = "John Viljoen", email = "johnviljoen2@gmail.com" }
 ]
 license = { text = "MIT" }
 readme = "README.md"
-keywords = [""]
+requires-python = ">=3.11"
+keywords = ["jax", "sympy", "jaxpr", "symbolic", "sparsity", "jacobian", "hessian"]
 
 dependencies = [
     "matplotlib",
     "tqdm",
-    "jax", # [cuda12]",
+    "jax", # [cuda13]",
     "sympy" # symbolic derivations
 ]
 
 [tool.setuptools.packages.find]
-where = [
-    "src", "problems", "jax2sympy"
-]  # list of folders that contain the packages (["."] by default)
+include = ["jax2sympy*"]  # only package the jax2sympy package, not tests/etc.
 
