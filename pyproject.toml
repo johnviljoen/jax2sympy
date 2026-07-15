@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,7 +9,8 @@ description = "Translate jaxpr graphs into elementwise SymPy expressions for sym
 authors = [
     { name = "John Viljoen", email = "johnviljoen2@gmail.com" }
 ]
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 readme = "README.md"
 requires-python = ">=3.11"
 keywords = ["jax", "sympy", "jaxpr", "symbolic", "sparsity", "jacobian", "hessian"]
@@ -20,6 +21,10 @@ dependencies = [
     "jax", # [cuda13]",
     "sympy" # symbolic derivations
 ]
+
+[project.urls]
+Homepage = "https://github.com/johnviljoen/jax2sympy"
+Repository = "https://github.com/johnviljoen/jax2sympy"
 
 [tool.setuptools.packages.find]
 include = ["jax2sympy*"]  # only package the jax2sympy package, not tests/etc.
