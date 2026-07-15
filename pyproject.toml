@@ -16,10 +16,10 @@ requires-python = ">=3.11"
 keywords = ["jax", "sympy", "jaxpr", "symbolic", "sparsity", "jacobian", "hessian"]
 
 dependencies = [
-    "matplotlib",
+    "jax",
+    "numpy",
+    "sympy",  # symbolic derivations
     "tqdm",
-    "jax", # [cuda13]",
-    "sympy" # symbolic derivations
 ]
 
 [project.urls]
