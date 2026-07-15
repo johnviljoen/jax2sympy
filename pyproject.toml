@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jax2sympy"
-version = "0.0.1"
+version = "0.0.2"
 description = "Translate jaxpr graphs into elementwise SymPy expressions for symbolic analysis."
 authors = [
     { name = "John Viljoen", email = "johnviljoen2@gmail.com" }
@@ -20,6 +20,7 @@ dependencies = [
     "numpy",
     "sympy",  # symbolic derivations
     "tqdm",
+    "sympy2jax"
 ]
 
 [project.urls]
